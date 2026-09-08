@@ -119,7 +119,7 @@ struct MainMenuView: View {
         }
         // Language picker sheet
         .sheet(isPresented: $showLanguagePicker) {
-            LanguagePickerView()
+            LanguagePickerView(onContinue: { showLanguagePicker = false })
         }
     }
 
