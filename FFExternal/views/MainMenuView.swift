@@ -80,7 +80,7 @@ struct MainMenuView: View {
             VStack(spacing: 0) {
                 topBar
                 infoCard
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 28)
                     .padding(.bottom, 10)
                 gameTabBar
                 TabView(selection: $selectedTab) {
@@ -177,7 +177,7 @@ struct MainMenuView: View {
         .padding(.bottom, 12)
     }
 
-    // MARK: ── Info Card (single compact table) ──
+    // MARK: ── Info Card (single compact table, all rows vertical) ──
 
     private var infoCard: some View {
         VStack(spacing: 0) {
@@ -205,9 +205,8 @@ struct MainMenuView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .truncationMode(.middle)
-                    .frame(maxWidth: 200, alignment: .trailing)
 
-                // Eye button — separate, clear tap target
+                // Eye button
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) { keyVisible.toggle() }
                 } label: {
@@ -224,68 +223,85 @@ struct MainMenuView: View {
 
             rowDivider
 
-            // ── DEVICE + iOS row (side by side) ──
-            HStack(spacing: 0) {
-                // iPhone
-                HStack(spacing: 8) {
-                    Image(systemName: "iphone")
-                        .font(.system(size: 11))
-                        .foregroundStyle(FFTheme.textSecondary)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("DEVICE")
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .foregroundStyle(FFTheme.textTertiary)
-                            .tracking(0.8)
-                        Text(licenseInfo.iPhoneModel)
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(FFTheme.text)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity)
+            // ── IOS VERSION row ──
+            HStack(spacing: 8) {
+                Image(systemName: "apple.logo")
+                    .font(.system(size: 11))
+                    .foregroundStyle(FFTheme.textSecondary)
+                    .frame(width: 18)
 
-                colDivider
+                Text("IOS VERSION")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(FFTheme.textSecondary)
+                    .tracking(0.8)
 
-                // iOS version + SUPPORTED badge
-                HStack(spacing: 8) {
-                    Image(systemName: "apple.logo")
-                        .font(.system(size: 11))
-                        .foregroundStyle(FFTheme.textSecondary)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("IOS VERSION")
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .foregroundStyle(FFTheme.textTertiary)
-                            .tracking(0.8)
-                        Text("iOS \(licenseInfo.iOSVersion)")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundStyle(FFTheme.text)
-                    }
-                    Spacer(minLength: 0)
+                Spacer()
 
-                    // VERIFIED badge
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(FFTheme.success)
-                        Text("VERIFIED")
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .foregroundStyle(FFTheme.success)
-                            .tracking(0.5)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(FFTheme.success.opacity(0.12))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().strokeBorder(FFTheme.success.opacity(0.25), lineWidth: 0.8))
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity)
+                Text("iOS \(licenseInfo.iOSVersion)")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(FFTheme.text)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            rowDivider
+
+            // ── DEVICE row ──
+            HStack(spacing: 8) {
+                Image(systemName: "iphone")
+                    .font(.system(size: 11))
+                    .foregroundStyle(FFTheme.textSecondary)
+                    .frame(width: 18)
+
+                Text("DEVICE")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(FFTheme.textSecondary)
+                    .tracking(0.8)
+
+                Spacer()
+
+                Text(licenseInfo.iPhoneModel)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(FFTheme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            rowDivider
+
+            // ── VERIFIED row ──
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(FFTheme.success)
+                    .frame(width: 18)
+
+                Text("STATUS")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(FFTheme.textSecondary)
+                    .tracking(0.8)
+
+                Spacer()
+
+                HStack(spacing: 5) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(FFTheme.success)
+                    Text("VERIFIED")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(FFTheme.success)
+                        .tracking(0.5)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(FFTheme.success.opacity(0.12))
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(FFTheme.success.opacity(0.30), lineWidth: 0.8))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
 
             rowDivider
 
@@ -310,6 +326,7 @@ struct MainMenuView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .background(
             RoundedRectangle(cornerRadius: FFTheme.cornerRadius, style: .continuous)
                 .fill(FFTheme.card)
@@ -322,9 +339,6 @@ struct MainMenuView: View {
 
     private var rowDivider: some View {
         Rectangle().fill(FFTheme.separator).frame(height: 0.6)
-    }
-    private var colDivider: some View {
-        Rectangle().fill(FFTheme.separator).frame(width: 0.6)
     }
 
     private var expiryColor: Color {
