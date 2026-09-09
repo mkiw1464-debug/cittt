@@ -1,6 +1,15 @@
 import Foundation
 import UIKit
 
+// MARK: - String Decryptor
+
+private enum _X {
+    static let k: UInt8 = 0x5A
+    static func d(_ b: [UInt8]) -> String {
+        String(bytes: b.map { $0 ^ k }, encoding: .utf8) ?? ""
+    }
+}
+
 // MARK: - Models
 
 struct LicenseResponse: Codable {
@@ -30,13 +39,17 @@ struct LicenseInfo {
 // MARK: - HWID
 
 enum DeviceID {
+    private static let _hk: [UInt8] = [0x3c, 0x3c, 0x3f, 0x22, 0x2e, 0x05, 0x32, 0x2d, 0x33, 0x3e]
+    private static let _hp: [UInt8] = [0x33, 0x35, 0x29, 0x77]
+
     static var hwid: String {
-        if let stored = UserDefaults.standard.string(forKey: "ffext_hwid") {
+        let key = _X.d(_hk)
+        if let stored = UserDefaults.standard.string(forKey: key) {
             return stored
         }
         let raw = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-        let hwid = "ios-\(raw.prefix(16).lowercased())"
-        UserDefaults.standard.set(hwid, forKey: "ffext_hwid")
+        let hwid = _X.d(_hp) + raw.prefix(16).lowercased()
+        UserDefaults.standard.set(hwid, forKey: key)
         return hwid
     }
 
@@ -44,7 +57,6 @@ enum DeviceID {
         UIDevice.current.name
     }
 
-    /// Human-readable iPhone model e.g. "iPhone 15 Pro"
     static var iPhoneModel: String {
         var size: size_t = 0
         sysctlbyname("hw.machine", nil, &size, nil, 0)
@@ -59,42 +71,33 @@ enum DeviceID {
         return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
     }
 
-    // MARK: Model map (extend as needed)
     private static func iPhoneModelName(from identifier: String) -> String {
         let map: [String: String] = [
-            // iPhone 16 series
             "iPhone17,1": "iPhone 16 Pro Max",
             "iPhone17,2": "iPhone 16 Pro",
             "iPhone17,3": "iPhone 16 Plus",
             "iPhone17,4": "iPhone 16",
-            // iPhone 15 series
             "iPhone16,1": "iPhone 15 Pro Max",
             "iPhone16,2": "iPhone 15 Pro",
             "iPhone15,4": "iPhone 15 Plus",
             "iPhone15,5": "iPhone 15",
-            // iPhone 14 series
             "iPhone15,2": "iPhone 14 Pro Max",
             "iPhone15,3": "iPhone 14 Pro",
             "iPhone14,7": "iPhone 14 Plus",
             "iPhone14,8": "iPhone 14",
-            // iPhone 13 series
-            // iPhone14,2 = iPhone 13 Pro  |  iPhone14,3 = iPhone 13 Pro Max
             "iPhone14,2": "iPhone 13 Pro",
             "iPhone14,3": "iPhone 13 Pro Max",
             "iPhone14,4": "iPhone 13 Mini",
             "iPhone14,5": "iPhone 13",
-            // iPhone 12 series
             "iPhone13,1": "iPhone 12 Mini",
             "iPhone13,2": "iPhone 12",
             "iPhone13,3": "iPhone 12 Pro",
             "iPhone13,4": "iPhone 12 Pro Max",
-            // iPhone 11 series
             "iPhone12,1": "iPhone 11",
             "iPhone12,3": "iPhone 11 Pro",
             "iPhone12,5": "iPhone 11 Pro Max",
-            // Simulator
-            "arm64": "Simulator",
-            "x86_64": "Simulator",
+            "arm64":      "Simulator",
+            "x86_64":     "Simulator",
         ]
         return map[identifier] ?? identifier
     }
@@ -103,10 +106,26 @@ enum DeviceID {
 // MARK: - Service
 
 enum LicenseService {
-    static let apiURL      = URL(string: "https://ffexxxx.vercel.app/api/licenses/validate")!
-    static let storageKey  = "ffext_license_key"
-    static let expiryKey   = "ffext_license_expiry"   // stores ISO8601 expiry string
-    static let hwidLockKey = "ffext_license_hwid"     // stored hwid from server on first login
+    // XOR-encoded strings — decoded at runtime only
+    private static let _au: [UInt8] = [0x32, 0x2e, 0x2e, 0x2a, 0x29, 0x60, 0x75, 0x75,
+                                        0x3c, 0x3c, 0x3f, 0x22, 0x22, 0x22, 0x22, 0x74,
+                                        0x2c, 0x3f, 0x28, 0x39, 0x3f, 0x36, 0x74, 0x3b,
+                                        0x2a, 0x2a, 0x75, 0x3b, 0x2a, 0x33, 0x75, 0x36,
+                                        0x33, 0x39, 0x3f, 0x34, 0x29, 0x3f, 0x29, 0x75,
+                                        0x2c, 0x3b, 0x36, 0x33, 0x3e, 0x3b, 0x2e, 0x3f]
+    private static let _sk: [UInt8] = [0x3c, 0x3c, 0x3f, 0x22, 0x2e, 0x05, 0x36, 0x33,
+                                        0x39, 0x3f, 0x34, 0x29, 0x3f, 0x05, 0x31, 0x3f, 0x23]
+    private static let _ek: [UInt8] = [0x3c, 0x3c, 0x3f, 0x22, 0x2e, 0x05, 0x36, 0x33,
+                                        0x39, 0x3f, 0x34, 0x29, 0x3f, 0x05, 0x3f, 0x22,
+                                        0x2a, 0x33, 0x28, 0x23]
+    private static let _hk: [UInt8] = [0x3c, 0x3c, 0x3f, 0x22, 0x2e, 0x05, 0x36, 0x33,
+                                        0x39, 0x3f, 0x34, 0x29, 0x3f, 0x05, 0x32, 0x2d,
+                                        0x33, 0x3e]
+
+    static var apiURL:      URL    { URL(string: _X.d(_au))! }
+    static var storageKey:  String { _X.d(_sk) }
+    static var expiryKey:   String { _X.d(_ek) }
+    static var hwidLockKey: String { _X.d(_hk) }
 
     // MARK: - Validate
 
@@ -135,8 +154,6 @@ enum LicenseService {
             throw LicenseError.invalidKey
         }
 
-        // 1-key 1-device enforcement:
-        // If server returns an hwid that does NOT match ours, reject
         if let serverHwid = decoded.hwid, !serverHwid.isEmpty {
             if serverHwid != DeviceID.hwid {
                 throw LicenseError.deviceMismatch
@@ -147,7 +164,6 @@ enum LicenseService {
         let expiryDate    = parseISODate(expiresAtRaw)
         let formattedExpiry = expiryDate.map { formatDate($0) } ?? expiresAtRaw
 
-        // Check if already expired
         if let exp = expiryDate, exp < Date() {
             throw LicenseError.expired
         }
@@ -165,17 +181,14 @@ enum LicenseService {
         return info
     }
 
-    // MARK: - Auto-session restore (called on app launch if key stored)
+    // MARK: - Auto-session restore
 
-    /// Builds LicenseInfo from stored credentials without hitting the network.
-    /// Returns nil if key missing or expired — caller must go to login.
     static func restoreSession() -> LicenseInfo? {
         guard let key    = storedKey(),
               let expRaw = UserDefaults.standard.string(forKey: expiryKey) else {
             return nil
         }
         let expiryDate = parseISODate(expRaw)
-        // Auto-logout if expired
         if let exp = expiryDate, exp < Date() {
             logout()
             return nil
@@ -225,7 +238,6 @@ enum LicenseService {
         return df.string(from: date)
     }
 
-    /// Masks all but first segment and last 4 chars: FFEX-XXXX-XXXX-1234 -> FFEX-••••-••••-1234
     static func maskedKey(_ key: String) -> String {
         let parts = key.components(separatedBy: "-")
         guard parts.count >= 2 else {
@@ -239,7 +251,6 @@ enum LicenseService {
         return ([prefix] + midMask + [last]).joined(separator: "-")
     }
 
-    /// Returns remaining time string for countdown display
     static func countdownString(from expiryDate: Date) -> String {
         let now = Date()
         guard expiryDate > now else { return "Expired" }
