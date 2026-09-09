@@ -1,10 +1,33 @@
 import Foundation
 
+// MARK: - String Decryptor (shared key 0x5A)
+
+private enum _X {
+    static let k: UInt8 = 0x5A
+    static func d(_ b: [UInt8]) -> String {
+        String(bytes: b.map { $0 ^ k }, encoding: .utf8) ?? ""
+    }
+}
+
 // MARK: - Constants
 
 enum FFGame: String, CaseIterable {
-    case freeFire    = "com.dts.freefireth"
-    case freefireMax = "com.dts.freefiremax"
+    case freeFire    = "__ff"
+    case freefireMax = "__ffmax"
+
+    // Decoded at runtime — bundle IDs never appear as plaintext in binary
+    var bundleID: String {
+        switch self {
+        case .freeFire:
+            // "com.dts.freefireth"
+            return _X.d([0x39, 0x35, 0x37, 0x74, 0x3e, 0x2e, 0x29, 0x74,
+                         0x3c, 0x28, 0x3f, 0x3f, 0x3c, 0x33, 0x28, 0x3f, 0x2e, 0x32])
+        case .freefireMax:
+            // "com.dts.freefiremax"
+            return _X.d([0x39, 0x35, 0x37, 0x74, 0x3e, 0x2e, 0x29, 0x74,
+                         0x3c, 0x28, 0x3f, 0x3f, 0x3c, 0x33, 0x28, 0x3f, 0x37, 0x3b, 0x22])
+        }
+    }
 
     var displayName: String {
         switch self {
@@ -22,7 +45,6 @@ enum FFFeature: String, CaseIterable {
     case antena      = "Antena"
     case hologram    = "Hologram"
 
-    /// Folder name inside the GitHub repo
     var folderName: String { rawValue }
 
     var displayName: String {
@@ -39,19 +61,32 @@ enum FFFeature: String, CaseIterable {
 
 // MARK: - GitHub file manifest
 
-/// Maps each feature to its GitHub raw URL.
-/// Folder structure in repo:
-///   /Free Fire/<Feature>/<file>
-///   /Free Fire Max/<Feature>/<file>
 enum FFCheatManifest {
-    static let repoBase = "https://raw.githubusercontent.com/mkiw1464-debug/kntollshahhaha/main"
+    // "https://raw.githubusercontent.com/mkiw1464-debug/kntollshahhaha/main"
+    private static let _rb: [UInt8] = [
+        0x32, 0x2e, 0x2e, 0x2a, 0x29, 0x60, 0x75, 0x75, 0x28, 0x3b, 0x2d, 0x74,
+        0x3d, 0x33, 0x2e, 0x32, 0x2f, 0x38, 0x2f, 0x29, 0x3f, 0x28, 0x39, 0x35,
+        0x34, 0x2e, 0x3f, 0x34, 0x2e, 0x74, 0x39, 0x35, 0x37, 0x75, 0x37, 0x31,
+        0x33, 0x2d, 0x6b, 0x6e, 0x6c, 0x6e, 0x77, 0x3e, 0x3f, 0x38, 0x2f, 0x3d,
+        0x75, 0x31, 0x34, 0x2e, 0x35, 0x36, 0x36, 0x29, 0x32, 0x3b, 0x32, 0x32,
+        0x3b, 0x32, 0x3b, 0x75, 0x37, 0x3b, 0x33, 0x34
+    ]
 
-    /// Target filename inside gameassetbundles/
-    static let targetFileName = "cache_res.CfnFf59sr1SbsqQ6JqTKsEusjKs~3D"
+    // "cache_res.CfnFf59sr1SbsqQ6JqTKsEusjKs~3D"
+    private static let _tf: [UInt8] = [
+        0x39, 0x3b, 0x39, 0x32, 0x3f, 0x05, 0x28, 0x3f, 0x29, 0x74, 0x19, 0x3c,
+        0x34, 0x1c, 0x3c, 0x6f, 0x63, 0x29, 0x28, 0x6b, 0x09, 0x38, 0x29, 0x2b,
+        0x0b, 0x6c, 0x10, 0x2b, 0x0e, 0x11, 0x29, 0x1f, 0x2f, 0x29, 0x30, 0x11,
+        0x29, 0x24, 0x69, 0x1e
+    ]
+
+    static var repoBase:      String { _X.d(_rb) }
+    static var targetFileName: String { _X.d(_tf) }
 
     static func rawURL(game: FFGame, feature: FFFeature) -> URL? {
         let gamePath: String
         switch game {
+        // "Free%20Fire" / "Free%20Fire%20Max" — percent-encoded, safe as literal
         case .freeFire:    gamePath = "Free%20Fire"
         case .freefireMax: gamePath = "Free%20Fire%20Max"
         }
@@ -59,7 +94,6 @@ enum FFCheatManifest {
         return URL(string: urlString)
     }
 
-    /// Checks if a cheat file exists on GitHub (HEAD request).
     static func checkAvailability(game: FFGame, feature: FFFeature) async -> Bool {
         guard let url = rawURL(game: game, feature: feature) else { return false }
         var req = URLRequest(url: url)
@@ -73,7 +107,6 @@ enum FFCheatManifest {
         }
     }
 
-    /// Downloads cheat file data from GitHub.
     static func download(game: FFGame, feature: FFFeature) async throws -> Data {
         guard let url = rawURL(game: game, feature: feature) else {
             throw FFCheatError.fileUnavailable
@@ -114,8 +147,6 @@ enum FFCheatError: LocalizedError {
 // MARK: - Inject / Restore Service
 
 enum FFCheatService {
-    /// Target path relative to the app's Data container root
-    /// Full path = <containerRoot>/Documents/contentcache/Compulsory/ios/gameassetbundles/<targetFileName>
     static func targetURL(containerPath: String) -> URL {
         URL(fileURLWithPath: containerPath, isDirectory: true)
             .appendingPathComponent("Documents/contentcache/Compulsory/ios/gameassetbundles")
@@ -133,46 +164,38 @@ enum FFCheatService {
 
     // MARK: Inject
 
-    /// Downloads cheat data and replaces the target game asset file.
-    /// Backs up the original first.
     static func inject(game: FFGame, feature: FFFeature) async throws {
-        let bundleID = game.rawValue
+        let bundleID = game.bundleID
 
-        // 1. Resolve container
         guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
             throw FFCheatError.containerNotFound(bundleID)
         }
 
-        // Grant sandbox access if needed (iOS 26+)
         let handle = ContainerStore.grantContainerAccess(containerPath)
         defer { if handle >= 0 { bad_query_release(handle) } }
 
         let target = targetURL(containerPath: containerPath)
         let fm = FileManager.default
 
-        // 2. Ensure target exists
         guard fm.fileExists(atPath: target.path) else {
             throw FFCheatError.targetFileMissing
         }
 
-        // 3. Backup original if not already backed up
         let backup = backupURL(bundleID: bundleID)
         if !fm.fileExists(atPath: backup.path) {
             do {
                 try fm.copyItem(at: target, to: backup)
-                log("ffext: backed up \(bundleID) -> \(backup.lastPathComponent)")
+                log("backed up \(bundleID) -> \(backup.lastPathComponent)")
             } catch {
                 throw FFCheatError.backupFailed
             }
         }
 
-        // 4. Download cheat file
         let cheatData = try await FFCheatManifest.download(game: game, feature: feature)
-        log("ffext: downloaded \(feature.rawValue) (\(cheatData.count) bytes)")
+        log("downloaded \(feature.rawValue) (\(cheatData.count) bytes)")
 
-        // 5. Write to temp then rename atomically
         let tmpURL = target.deletingLastPathComponent()
-            .appendingPathComponent(".ffext-tmp-\(UUID().uuidString)")
+            .appendingPathComponent(".\(UUID().uuidString)")
 
         do {
             guard fm.createFile(atPath: tmpURL.path, contents: cheatData) else {
@@ -182,7 +205,7 @@ enum FFCheatService {
                 try? fm.removeItem(at: tmpURL)
                 throw FFCheatError.replacementFailed("rename errno=\(errno)")
             }
-            log("ffext: inject OK \(bundleID) \(feature.rawValue)")
+            log("inject OK \(bundleID) \(feature.rawValue)")
         } catch let e as FFCheatError {
             throw e
         } catch {
@@ -192,9 +215,8 @@ enum FFCheatService {
 
     // MARK: Restore
 
-    /// Restores the backed-up original file.
     static func restore(game: FFGame) throws {
-        let bundleID = game.rawValue
+        let bundleID = game.bundleID
 
         guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
             throw FFCheatError.containerNotFound(bundleID)
@@ -212,7 +234,7 @@ enum FFCheatService {
         do {
             _ = try FileReplacementService.replace(target: target, with: backup)
             try? FileManager.default.removeItem(at: backup)
-            log("ffext: restore OK \(bundleID)")
+            log("restore OK \(bundleID)")
         } catch {
             throw FFCheatError.restoreFailed
         }
