@@ -3,6 +3,15 @@ import UIKit
 import Darwin
 import Combine
 
+// MARK: - String Decryptor
+
+private enum _X {
+    static let k: UInt8 = 0x5A
+    static func d(_ b: [UInt8]) -> String {
+        String(bytes: b.map { $0 ^ k }, encoding: .utf8) ?? ""
+    }
+}
+
 // MARK: - Global logger
 
 class AppLog: ObservableObject {
@@ -13,7 +22,12 @@ class AppLog: ObservableObject {
     }
 }
 
-func log(_ msg: String) { AppLog.shared.append("[FFExt] \(msg)") }
+// Log prefix "[FFExt]" — decoded at runtime, never in binary as plaintext
+private let _lp: String = {
+    _X.d([0x01, 0x1c, 0x1c, 0x1f, 0x22, 0x2e, 0x07])
+}()
+
+func log(_ msg: String) { AppLog.shared.append("\(_lp) \(msg)") }
 
 private var logCapturePipe: Pipe?
 
@@ -86,10 +100,10 @@ enum ExploitStatus: Equatable {
     var isFailed: Bool { if case .failed = self { return true }; return false }
     var displayText: String {
         switch self {
-        case .notStarted:          return "Not attempted"
-        case .success(let m):      return "OK via \(m)"
-        case .failed(let m, let c):return "FAILED \(m) (\(c))"
-        case .unsupported(let m):  return "Unsupported: \(m)"
+        case .notStarted:           return "Not attempted"
+        case .success(let m):       return "OK via \(m)"
+        case .failed(let m, let c): return "FAILED \(m) (\(c))"
+        case .unsupported(let m):   return "Unsupported: \(m)"
         }
     }
 }
@@ -97,10 +111,14 @@ enum ExploitStatus: Equatable {
 // MARK: - App Paths
 
 enum AppPaths {
+    // "ffext_backups" decoded at runtime
+    private static let _bd: [UInt8] = [0x3c, 0x3c, 0x3f, 0x22, 0x2e, 0x05,
+                                        0x38, 0x3b, 0x39, 0x31, 0x2f, 0x2a, 0x29]
+
     static var backups: String {
         let u = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let b = u.appendingPathComponent("ffext_backups", isDirectory: true)
+        let b = u.appendingPathComponent(_X.d(_bd), isDirectory: true)
         try? FileManager.default.createDirectory(at: b, withIntermediateDirectories: true)
         return b.path
     }
