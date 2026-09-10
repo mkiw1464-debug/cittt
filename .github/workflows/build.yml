@@ -65,9 +65,40 @@ jobs:
           xcodebuild -project FFExternal.xcodeproj -list 2>&1 || true
 
       - name: Install SwiftShield
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SSVER=$(curl -s https://api.github.com/repos/rockbruno/swiftshield/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
-          curl -L "https://github.com/rockbruno/swiftshield/releases/download/${SSVER}/swiftshield.zip" -o /tmp/ss.zip
+          # Try GitHub API — GITHUB_TOKEN header prevents rate-limit issues
+          SSVER=$(curl -sf \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/rockbruno/swiftshield/releases/latest" \
+            | grep '"tag_name"' | cut -d'"' -f4)
+
+          # Fallback: hardcode last known stable version if API returns empty
+          if [ -z "$SSVER" ]; then
+            SSVER="3.14.3"
+            echo "GitHub API returned empty — using fallback version $SSVER"
+          fi
+
+          echo "Installing SwiftShield $SSVER"
+          DOWNLOAD_URL="https://github.com/rockbruno/swiftshield/releases/download/${SSVER}/swiftshield.zip"
+
+          # Download with retry
+          for attempt in 1 2 3; do
+            curl -fL "$DOWNLOAD_URL" -o /tmp/ss.zip && break
+            echo "Download attempt $attempt failed, retrying in 3s..."
+            sleep 3
+          done
+
+          # Sanity check — abort early if not a valid zip
+          if ! file /tmp/ss.zip | grep -qi "zip"; then
+            echo "ERROR: Downloaded file is not a valid zip archive"
+            file /tmp/ss.zip
+            xxd /tmp/ss.zip | head -3
+            exit 1
+          fi
+
           unzip -o /tmp/ss.zip -d /tmp/swiftshield
           chmod +x /tmp/swiftshield/swiftshield
           echo "/tmp/swiftshield" >> $GITHUB_PATH
@@ -82,7 +113,6 @@ jobs:
             --ignore-files "App.swift,DesignSystem.swift" \
             2>&1 | tee /tmp/swiftshield.log || true
           # If SwiftShield fails (e.g. project config), continue with unobfuscated source
-          # SwiftShield writes obfuscated project to $RUNNER_TEMP/obfuscated
           if [ -d "$RUNNER_TEMP/obfuscated" ]; then
             echo "SS_PROJ_DIR=$RUNNER_TEMP/obfuscated" >> $GITHUB_ENV
           else
