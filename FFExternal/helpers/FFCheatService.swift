@@ -42,7 +42,7 @@ enum FFFeature: String, CaseIterable {
     case aimNeck     = "AimNeck"
     case aimDrag     = "AimDrag"
     case magicBullet = "MagicBullet"
-    case antena      = "Antena"
+    case aimChest    = "AimChest"   // replaced Antena
     case hologram    = "Hologram"
 
     var folderName: String { rawValue }
@@ -53,7 +53,7 @@ enum FFFeature: String, CaseIterable {
         case .aimNeck:     return "AimNeck"
         case .aimDrag:     return "AimDrag"
         case .magicBullet: return "Magic Bullet"
-        case .antena:      return "Antena"
+        case .aimChest:    return "AimChest"
         case .hologram:    return "Hologram"
         }
     }
@@ -62,16 +62,27 @@ enum FFFeature: String, CaseIterable {
 // MARK: - GitHub file manifest
 
 enum FFCheatManifest {
-    // "https://raw.githubusercontent.com/mkiw1464-debug/kntollshahhaha/main"
-    private static let _rb: [UInt8] = [
-        0x32, 0x2e, 0x2e, 0x2a, 0x29, 0x60, 0x75, 0x75, 0x28, 0x3b, 0x2d, 0x74,
-        0x3d, 0x33, 0x2e, 0x32, 0x2f, 0x38, 0x2f, 0x29, 0x3f, 0x28, 0x39, 0x35,
-        0x34, 0x2e, 0x3f, 0x34, 0x2e, 0x74, 0x39, 0x35, 0x37, 0x75, 0x37, 0x31,
-        0x33, 0x2d, 0x6b, 0x6e, 0x6c, 0x6e, 0x77, 0x3e, 0x3f, 0x38, 0x2f, 0x3d,
-        0x75, 0x31, 0x34, 0x2e, 0x35, 0x36, 0x36, 0x29, 0x32, 0x3b, 0x32, 0x32,
-        0x3b, 0x32, 0x3b, 0x75, 0x37, 0x3b, 0x33, 0x34
-    ]
+    // "https://raw.githubusercontent.com/mkiw1464-debug/filecit/main"
+    // XOR key 0x5A — encode: byte ^ 0x5A
+    private static let _rb: [UInt8] = {
+        // "https://raw.githubusercontent.com/mkiw1464-debug/filecit/main"
+        let s = "https://raw.githubusercontent.com/mkiw1464-debug/filecit/main"
+        return s.utf8.map { $0 ^ 0x5A }
+    }()
 
+    // Hologram target filenames differ per game — stored separately
+    // FF:    "shaders.HPt9DZviTSXL9hpGW9QNOMigNLA~3D"
+    // FFMax: "shaders.RXqs706xmtWYhbN9TqDzP8LDRzk~3D"
+    private static let _hlFF: [UInt8] = {
+        let s = "shaders.HPt9DZviTSXL9hpGW9QNOMigNLA~3D"
+        return s.utf8.map { $0 ^ 0x5A }
+    }()
+    private static let _hlFFMax: [UInt8] = {
+        let s = "shaders.RXqs706xmtWYhbN9TqDzP8LDRzk~3D"
+        return s.utf8.map { $0 ^ 0x5A }
+    }()
+
+    // Regular cheat features target filename (cache_res.*)
     // "cache_res.CfnFf59sr1SbsqQ6JqTKsEusjKs~3D"
     private static let _tf: [UInt8] = [
         0x39, 0x3b, 0x39, 0x32, 0x3f, 0x05, 0x28, 0x3f, 0x29, 0x74, 0x19, 0x3c,
@@ -83,14 +94,21 @@ enum FFCheatManifest {
     static var repoBase:      String { _X.d(_rb) }
     static var targetFileName: String { _X.d(_tf) }
 
+    static func hologramFileName(game: FFGame) -> String {
+        switch game {
+        case .freeFire:    return _X.d(_hlFF)
+        case .freefireMax: return _X.d(_hlFFMax)
+        }
+    }
+
     static func rawURL(game: FFGame, feature: FFFeature) -> URL? {
         let gamePath: String
         switch game {
-        // "Free%20Fire" / "Free%20Fire%20Max" — percent-encoded, safe as literal
         case .freeFire:    gamePath = "Free%20Fire"
         case .freefireMax: gamePath = "Free%20Fire%20Max"
         }
-        let urlString = "\(repoBase)/\(gamePath)/\(feature.folderName)/\(targetFileName)"
+        let fileName = (feature == .hologram) ? hologramFileName(game: game) : targetFileName
+        let urlString = "\(repoBase)/\(gamePath)/\(feature.folderName)/\(fileName)"
         return URL(string: urlString)
     }
 
@@ -147,19 +165,47 @@ enum FFCheatError: LocalizedError {
 // MARK: - Inject / Restore Service
 
 enum FFCheatService {
-    static func targetURL(containerPath: String) -> URL {
-        URL(fileURLWithPath: containerPath, isDirectory: true)
-            .appendingPathComponent("Documents/contentcache/Compulsory/ios/gameassetbundles")
-            .appendingPathComponent(FFCheatManifest.targetFileName)
+
+    // Returns the target URL inside the game container.
+    // Hologram uses Optional/ios/gameassetbundles with its unique shader filename.
+    // All other features use Compulsory/ios/gameassetbundles with the cache_res filename.
+    static func targetURL(containerPath: String, feature: FFFeature, game: FFGame) -> URL {
+        let base = URL(fileURLWithPath: containerPath, isDirectory: true)
+            .appendingPathComponent("Documents/contentcache")
+
+        switch feature {
+        case .hologram:
+            return base
+                .appendingPathComponent("Optional/ios/gameassetbundles")
+                .appendingPathComponent(FFCheatManifest.hologramFileName(game: game))
+        default:
+            return base
+                .appendingPathComponent("Compulsory/ios/gameassetbundles")
+                .appendingPathComponent(FFCheatManifest.targetFileName)
+        }
     }
 
-    static func backupURL(bundleID: String) -> URL {
-        URL(fileURLWithPath: AppPaths.backups, isDirectory: true)
-            .appendingPathComponent("\(bundleID)_\(FFCheatManifest.targetFileName).bak")
+    // Backup key includes feature name so hologram & regular features don't collide
+    static func backupURL(bundleID: String, feature: FFFeature) -> URL {
+        let fileName: String
+        switch feature {
+        case .hologram:
+            fileName = "\(bundleID)_hologram_\(feature.rawValue).bak"
+        default:
+            fileName = "\(bundleID)_\(FFCheatManifest.targetFileName).bak"
+        }
+        return URL(fileURLWithPath: AppPaths.backups, isDirectory: true)
+            .appendingPathComponent(fileName)
     }
 
     static func hasBackup(bundleID: String) -> Bool {
-        FileManager.default.fileExists(atPath: backupURL(bundleID: bundleID).path)
+        // Check any feature backup exists (regular or hologram)
+        for feature in FFFeature.allCases {
+            if FileManager.default.fileExists(atPath: backupURL(bundleID: bundleID, feature: feature).path) {
+                return true
+            }
+        }
+        return false
     }
 
     // MARK: Inject
@@ -174,18 +220,18 @@ enum FFCheatService {
         let handle = ContainerStore.grantContainerAccess(containerPath)
         defer { if handle >= 0 { bad_query_release(handle) } }
 
-        let target = targetURL(containerPath: containerPath)
+        let target = targetURL(containerPath: containerPath, feature: feature, game: game)
         let fm = FileManager.default
 
         guard fm.fileExists(atPath: target.path) else {
             throw FFCheatError.targetFileMissing
         }
 
-        let backup = backupURL(bundleID: bundleID)
+        let backup = backupURL(bundleID: bundleID, feature: feature)
         if !fm.fileExists(atPath: backup.path) {
             do {
                 try fm.copyItem(at: target, to: backup)
-                log("backed up \(bundleID) -> \(backup.lastPathComponent)")
+                log("backed up \(bundleID)/\(feature.rawValue) -> \(backup.lastPathComponent)")
             } catch {
                 throw FFCheatError.backupFailed
             }
@@ -225,18 +271,24 @@ enum FFCheatService {
         let handle = ContainerStore.grantContainerAccess(containerPath)
         defer { if handle >= 0 { bad_query_release(handle) } }
 
-        let backup = backupURL(bundleID: bundleID)
-        guard FileManager.default.fileExists(atPath: backup.path) else {
-            throw FFCheatError.noBackup
+        // Restore all backed-up features for this game
+        var anyRestored = false
+        for feature in FFFeature.allCases {
+            let backup = backupURL(bundleID: bundleID, feature: feature)
+            guard FileManager.default.fileExists(atPath: backup.path) else { continue }
+            let target = targetURL(containerPath: containerPath, feature: feature, game: game)
+            do {
+                _ = try FileReplacementService.replace(target: target, with: backup)
+                try? FileManager.default.removeItem(at: backup)
+                log("restore OK \(bundleID)/\(feature.rawValue)")
+                anyRestored = true
+            } catch {
+                throw FFCheatError.restoreFailed
+            }
         }
 
-        let target = targetURL(containerPath: containerPath)
-        do {
-            _ = try FileReplacementService.replace(target: target, with: backup)
-            try? FileManager.default.removeItem(at: backup)
-            log("restore OK \(bundleID)")
-        } catch {
-            throw FFCheatError.restoreFailed
+        if !anyRestored {
+            throw FFCheatError.noBackup
         }
     }
 }
