@@ -127,7 +127,7 @@ enum LicenseService {
     static var expiryKey:   String { _X.d(_ek) }
     static var hwidLockKey: String { _X.d(_hk) }
 
-    // MARK: - Validate
+    // MARK: - Validate (login)
 
     static func validate(key: String) async throws -> LicenseInfo {
         var request = URLRequest(url: apiURL)
@@ -182,8 +182,41 @@ enum LicenseService {
     }
 
     // MARK: - Auto-session restore
+    // 
+    // FIXED: sebelum ni hanya check local expiry — key banned/deleted kat server
+    // still boleh masuk. Sekarang validate dengan server dulu, kalau server reject
+    // (banned, deleted, expired, device mismatch) terus auto-logout.
+    // 
+    // Returns nil instantly jika tiada stored key.
+    // Caller perlu await — panggil dari .task atau async context.
 
-    static func restoreSession() -> LicenseInfo? {
+    static func restoreSession() async -> LicenseInfo? {
+        guard let key = storedKey() else { return nil }
+
+        // Fast local check: kalau expired locally, buang terus tanpa perlukan network
+        if let expRaw = UserDefaults.standard.string(forKey: expiryKey),
+           let expDate = parseISODate(expRaw),
+           expDate < Date() {
+            logout()
+            return nil
+        }
+
+        // Server-side validation — tangkap ban, delete, dan expire sebenar
+        do {
+            let info = try await validate(key: key)
+            return info
+        } catch {
+            // Semua error dari server (invalid, expired, banned, device mismatch)
+            // → logout dan paksa login semula
+            logout()
+            return nil
+        }
+    }
+
+    // Synchronous restore (local-only) — digunakan untuk fast UI bootstrap
+    // sebelum async server check siap. Caller wajib follow up dengan
+    // restoreSession() async untuk server validation.
+    static func restoreSessionLocal() -> LicenseInfo? {
         guard let key    = storedKey(),
               let expRaw = UserDefaults.standard.string(forKey: expiryKey) else {
             return nil
@@ -202,6 +235,19 @@ enum LicenseService {
             iOSVersion:  DeviceID.iOSVersion,
             iPhoneModel: DeviceID.iPhoneModel
         )
+    }
+
+    // MARK: - Periodic re-validation
+    // Dipanggil dari MainMenuView timer setiap 60 saat untuk tangkap
+    // mid-session ban/delete tanpa perlu restart app.
+
+    static func revalidateBackground(key: String) async -> Bool {
+        do {
+            _ = try await validate(key: key)
+            return true
+        } catch {
+            return false
+        }
     }
 
     // MARK: - Storage
