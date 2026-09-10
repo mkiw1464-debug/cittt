@@ -64,9 +64,15 @@ struct MainMenuView: View {
 
     @State private var selectedTab: Int = 0
     @State private var countdown: String = ""
-    @State private var showLogoutConfirm   = false
-    @State private var showLanguagePicker  = false
-    @State private var keyVisible          = false
+    @State private var showLogoutConfirm        = false
+    @State private var showLanguagePicker       = false
+    @State private var showDeepCleanConfirm     = false
+    @State private var deepCleanResult: String? = nil
+    @State private var keyVisible               = false
+
+    // Revalidation ticker — setiap 60 saat check server
+    // supaya mid-session ban/delete auto-logout
+    @State private var revalidateTick: Int = 0
 
     let licenseInfo: LicenseInfo
     let onLogout: () -> Void
@@ -98,6 +104,7 @@ struct MainMenuView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedTab)
 
+                deepCleanButton
                 telegramBanner
             }
         }
@@ -108,7 +115,21 @@ struct MainMenuView: View {
         }
         .onReceive(timer) { _ in
             refreshCountdown()
+
+            // Local expiry check tiap saat
             if let exp = licenseInfo.expiryDate, exp < Date() { onLogout() }
+
+            // Server revalidation setiap 60 saat — tangkap ban/delete
+            revalidateTick += 1
+            if revalidateTick >= 60 {
+                revalidateTick = 0
+                Task {
+                    let still = await LicenseService.revalidateBackground(key: licenseInfo.key)
+                    if !still {
+                        await MainActor.run { onLogout() }
+                    }
+                }
+            }
         }
         // Logout confirm
         .alert(lang.t("logout_confirm_title"), isPresented: $showLogoutConfirm) {
@@ -116,6 +137,20 @@ struct MainMenuView: View {
             Button(lang.t("logout_confirm_cancel"), role: .cancel) {}
         } message: {
             Text(lang.t("logout_confirm_msg"))
+        }
+        // Deep Clean confirm
+        .alert("Deep Clean", isPresented: $showDeepCleanConfirm) {
+            Button("Delete", role: .destructive) { doDeepClean() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will clear Free Fire App Data")
+        }
+        // Deep Clean result toast
+        .alert(deepCleanResult ?? "", isPresented: .init(
+            get: { deepCleanResult != nil },
+            set: { if !$0 { deepCleanResult = nil } }
+        )) {
+            Button("OK", role: .cancel) { deepCleanResult = nil }
         }
         // Language picker sheet
         .sheet(isPresented: $showLanguagePicker) {
@@ -126,6 +161,51 @@ struct MainMenuView: View {
     private func refreshCountdown() {
         if let exp = licenseInfo.expiryDate {
             countdown = LicenseService.countdownString(from: exp)
+        }
+    }
+
+    // MARK: - Deep Clean
+
+    private func doDeepClean() {
+        let fm = FileManager.default
+        let bundleFF    = FFGame.freeFire.bundleID    // "com.dts.freefireth"
+        let bundleFFMax = FFGame.freefireMax.bundleID // "com.dts.freefiremax"
+
+        var deleted: [String] = []
+        var failed:  [String] = []
+
+        for bundleID in [bundleFF, bundleFFMax] {
+            guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
+                failed.append(bundleID)
+                continue
+            }
+            let containerURL = URL(fileURLWithPath: containerPath, isDirectory: true)
+            do {
+                // Delete contents of the container folder (not the UUID folder itself)
+                let contents = try fm.contentsOfDirectory(
+                    at: containerURL,
+                    includingPropertiesForKeys: nil,
+                    options: []
+                )
+                for item in contents {
+                    try? fm.removeItem(at: item)
+                }
+                deleted.append(bundleID)
+                log("deep clean OK: \(bundleID)")
+            } catch {
+                failed.append(bundleID)
+                log("deep clean FAIL: \(bundleID) — \(error.localizedDescription)")
+            }
+        }
+
+        // Reset injected state
+        state.ffInjected    = false
+        state.ffMaxInjected = false
+
+        if failed.isEmpty {
+            deepCleanResult = "Cleaned successfully."
+        } else {
+            deepCleanResult = "Done. Failed: \(failed.joined(separator: ", "))"
         }
     }
 
@@ -177,7 +257,7 @@ struct MainMenuView: View {
         .padding(.bottom, 12)
     }
 
-    // MARK: ── Info Card (single compact table, all rows vertical) ──
+    // MARK: ── Info Card ──
 
     private var infoCard: some View {
         VStack(spacing: 0) {
@@ -196,7 +276,6 @@ struct MainMenuView: View {
 
                 Spacer()
 
-                // masked / visible key
                 Text(keyVisible
                      ? licenseInfo.key
                      : LicenseService.maskedKey(licenseInfo.key))
@@ -206,7 +285,6 @@ struct MainMenuView: View {
                     .minimumScaleFactor(0.6)
                     .truncationMode(.middle)
 
-                // Eye button
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) { keyVisible.toggle() }
                 } label: {
@@ -271,7 +349,7 @@ struct MainMenuView: View {
 
             rowDivider
 
-            // ── VERIFIED row ──
+            // ── STATUS row ──
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 11))
@@ -380,6 +458,36 @@ struct MainMenuView: View {
             Rectangle().fill(FFTheme.separator).frame(height: 0.6),
             alignment: .bottom
         )
+    }
+
+    // MARK: ── Deep Clean Button ──
+
+    private var deepCleanButton: some View {
+        Button {
+            showDeepCleanConfirm = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("DEEP CLEAN")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .tracking(0.5)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 13)
+            .background(FFTheme.danger)
+            .overlay(
+                Rectangle().fill(FFTheme.separator).frame(height: 0.6),
+                alignment: .top
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: ── Telegram Banner ──
@@ -544,7 +652,6 @@ struct GameMenuView: View {
             Color.black.opacity(0.82).ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
-                // Faux window chrome
                 HStack(spacing: 6) {
                     Circle().fill(Color(red: 1, green: 0.37, blue: 0.33)).frame(width: 10, height: 10)
                     Circle().fill(Color(red: 1, green: 0.73, blue: 0.18)).frame(width: 10, height: 10)
@@ -623,12 +730,33 @@ struct GameMenuView: View {
             try? await Task.sleep(for: .milliseconds(350))
             line("→ Checking sandbox access...")
             try? await Task.sleep(for: .milliseconds(350))
-            line("→ Downloading \(feature.displayName)...")
+
+            // Hologram: inject hologram before entering Free Fire
+            if feature == .hologram {
+                line("→ Injecting hologram before entering the Free Fire Application...")
+            } else {
+                line("→ Downloading \(feature.displayName)...")
+            }
             try? await Task.sleep(for: .milliseconds(500))
 
             do {
                 try await FFCheatService.inject(game: game, feature: feature)
-                line("→ Replacing gameassetbundles/cache_res...")
+                let flowPath: String
+                switch game {
+                case .freeFire:
+                    if feature == .hologram {
+                        flowPath = "com.dts.freefireth/Documents/contentcache/Optional/ios/gameassetbundles/shaders.HPt9DZviTSXL9hpGW9QNOMigNLA~3D"
+                    } else {
+                        flowPath = "com.dts.freefireth/Documents/contentcache/Compulsory/ios/gameassetbundles/\(FFCheatManifest.targetFileName)"
+                    }
+                case .freefireMax:
+                    if feature == .hologram {
+                        flowPath = "com.dts.freefiremax/Documents/contentcache/Optional/ios/gameassetbundles/shaders.RXqs706xmtWYhbN9TqDzP8LDRzk~3D"
+                    } else {
+                        flowPath = "com.dts.freefiremax/Documents/contentcache/Compulsory/ios/gameassetbundles/\(FFCheatManifest.targetFileName)"
+                    }
+                }
+                line("→ Replacing \(flowPath)...")
                 try? await Task.sleep(for: .milliseconds(400))
                 line("✓ Inject success — \(feature.displayName)")
                 try? await Task.sleep(for: .milliseconds(600))
@@ -767,7 +895,7 @@ private struct FeatureCard: View {
         case .aimNeck:     return "scope"
         case .aimDrag:     return "cursorarrow.motionlines"
         case .magicBullet: return "burst.fill"
-        case .antena:      return "antenna.radiowaves.left.and.right"
+        case .aimChest:    return "target"       // replaced antena
         case .hologram:    return "waveform"
         }
     }
