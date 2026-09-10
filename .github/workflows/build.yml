@@ -100,8 +100,15 @@ jobs:
           fi
 
           unzip -o /tmp/ss.zip -d /tmp/swiftshield
-          chmod +x /tmp/swiftshield/swiftshield
-          echo "/tmp/swiftshield" >> $GITHUB_PATH
+          # SwiftShield 4.x ships binary under bin/, not at root
+          SS_BIN=$(find /tmp/swiftshield -name "swiftshield" -type f | grep -v dSYM | head -1)
+          if [ -z "$SS_BIN" ]; then
+            echo "ERROR: swiftshield binary not found after extraction"
+            find /tmp/swiftshield -type f
+            exit 1
+          fi
+          chmod +x "$SS_BIN"
+          echo "$(dirname "$SS_BIN")" >> $GITHUB_PATH
 
       - name: Obfuscate Swift symbols (SwiftShield)
         run: |
