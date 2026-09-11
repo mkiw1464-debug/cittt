@@ -693,9 +693,9 @@ struct GameMenuView: View {
     }
 
     private func lineColor(_ line: String) -> Color {
-        if line.contains("✓") || line.contains("OK") || line.contains("success") { return FFTheme.success }
-        if line.contains("✗") || line.contains("error") || line.contains("FAIL")  { return FFTheme.danger }
-        if line.contains("→") { return FFTheme.accentAlt }
+        if line.contains("Success") || line.contains("✓") || line.contains("OK") { return FFTheme.success }
+        if line.contains("✗") || line.contains("error") || line.contains("FAIL") { return FFTheme.danger }
+        if line.contains("Injecting") || line.contains("Exploiting")             { return FFTheme.accentAlt }
         return .white.opacity(0.70)
     }
 
@@ -726,39 +726,15 @@ struct GameMenuView: View {
         }
 
         Task {
-            line("→ Resolving container: \(game.rawValue)")
-            try? await Task.sleep(for: .milliseconds(350))
-            line("→ Checking sandbox access...")
-            try? await Task.sleep(for: .milliseconds(350))
-
-            // Hologram: inject hologram before entering Free Fire
-            if feature == .hologram {
-                line("→ Injecting hologram before entering the Free Fire Application...")
-            } else {
-                line("→ Downloading \(feature.displayName)...")
-            }
+            let gameName = game.displayName
+            line("Exploiting \(gameName)")
+            try? await Task.sleep(for: .milliseconds(400))
+            line("Injecting \(feature.displayName)")
             try? await Task.sleep(for: .milliseconds(500))
 
             do {
                 try await FFCheatService.inject(game: game, feature: feature)
-                let flowPath: String
-                switch game {
-                case .freeFire:
-                    if feature == .hologram {
-                        flowPath = "com.dts.freefireth/Documents/contentcache/Optional/ios/gameassetbundles/shaders.HPt9DZviTSXL9hpGW9QNOMigNLA~3D"
-                    } else {
-                        flowPath = "com.dts.freefireth/Documents/contentcache/Compulsory/ios/gameassetbundles/\(FFCheatManifest.targetFileName)"
-                    }
-                case .freefireMax:
-                    if feature == .hologram {
-                        flowPath = "com.dts.freefiremax/Documents/contentcache/Optional/ios/gameassetbundles/shaders.RXqs706xmtWYhbN9TqDzP8LDRzk~3D"
-                    } else {
-                        flowPath = "com.dts.freefiremax/Documents/contentcache/Compulsory/ios/gameassetbundles/\(FFCheatManifest.targetFileName)"
-                    }
-                }
-                line("→ Replacing \(flowPath)...")
-                try? await Task.sleep(for: .milliseconds(400))
-                line("✓ Inject success — \(feature.displayName)")
+                line("Success inject \(feature.displayName)")
                 try? await Task.sleep(for: .milliseconds(600))
                 await MainActor.run {
                     withAnimation { showTerminal = false }
@@ -895,8 +871,8 @@ private struct FeatureCard: View {
         case .aimNeck:     return "scope"
         case .aimDrag:     return "cursorarrow.motionlines"
         case .magicBullet: return "burst.fill"
-        case .aimChest:    return "target"       // replaced antena
-        case .hologram:    return "waveform"
+        case .aimChest:    return "target"
+        case .esp:         return "eye.fill"
         }
     }
 }
