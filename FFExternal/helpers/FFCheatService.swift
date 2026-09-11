@@ -15,7 +15,6 @@ enum FFGame: String, CaseIterable {
     case freeFire    = "__ff"
     case freefireMax = "__ffmax"
 
-    // Decoded at runtime — bundle IDs never appear as plaintext in binary
     var bundleID: String {
         switch self {
         case .freeFire:
@@ -42,8 +41,8 @@ enum FFFeature: String, CaseIterable {
     case aimNeck     = "AimNeck"
     case aimDrag     = "AimDrag"
     case magicBullet = "MagicBullet"
-    case aimChest    = "AimChest"   // replaced Antena
-    case hologram    = "Hologram"
+    case aimChest    = "AimChest"
+    case esp         = "ESP"
 
     var folderName: String { rawValue }
 
@@ -54,15 +53,37 @@ enum FFFeature: String, CaseIterable {
         case .aimDrag:     return "AimDrag"
         case .magicBullet: return "Magic Bullet"
         case .aimChest:    return "AimChest"
-        case .hologram:    return "Hologram"
+        case .esp:         return "ESP"
         }
     }
+
+    /// ESP guna flow inject-3-file ke Documents, bukan cache_res replacement
+    var isESP: Bool { self == .esp }
 }
 
-// MARK: - GitHub file manifest
+// MARK: - ESP File Names (injected into game Documents/)
+
+private enum ESPFiles {
+    // "config.bin"
+    private static let _cfg:   [UInt8] = [0x39, 0x35, 0x34, 0x3c, 0x33, 0x3d, 0x74, 0x38, 0x33, 0x34]
+    // "localConfig.json"
+    private static let _local: [UInt8] = [0x36, 0x35, 0x39, 0x3b, 0x36, 0x19, 0x35, 0x34, 0x3c, 0x33,
+                                           0x3d, 0x74, 0x30, 0x29, 0x35, 0x34]
+    // "Assembly-CSharp-patch.bytes"
+    private static let _patch: [UInt8] = [0x1b, 0x29, 0x29, 0x3f, 0x37, 0x38, 0x36, 0x23, 0x77, 0x19,
+                                           0x09, 0x32, 0x3b, 0x28, 0x2a, 0x77, 0x2a, 0x3b, 0x2e, 0x39,
+                                           0x32, 0x74, 0x38, 0x23, 0x2e, 0x3f, 0x29]
+
+    static var configBin:   String { _X.d(_cfg) }
+    static var localConfig: String { _X.d(_local) }
+    static var patchBytes:  String { _X.d(_patch) }
+    static var all:         [String] { [configBin, localConfig, patchBytes] }
+}
+
+// MARK: - GitHub Manifest
 
 enum FFCheatManifest {
-    // "https://raw.githubusercontent.com/mkiw1464-debug/filecit/main"
+    // "https://raw.githubusercontent.com/mkiw1464-debug/citbaru/main"
     private static let _rb: [UInt8] = [
         0x32, 0x2e, 0x2e, 0x2a, 0x29, 0x60, 0x75, 0x75,
         0x28, 0x3b, 0x2d, 0x74, 0x3d, 0x33, 0x2e, 0x32,
@@ -70,30 +91,10 @@ enum FFCheatManifest {
         0x34, 0x2e, 0x3f, 0x34, 0x2e, 0x74, 0x39, 0x35,
         0x37, 0x75, 0x37, 0x31, 0x33, 0x2d, 0x6b, 0x6e,
         0x6c, 0x6e, 0x77, 0x3e, 0x3f, 0x38, 0x2f, 0x3d,
-        0x75, 0x3c, 0x33, 0x36, 0x3f, 0x39, 0x33, 0x2e,
+        0x75, 0x39, 0x33, 0x2e, 0x38, 0x3b, 0x28, 0x2f,
         0x75, 0x37, 0x3b, 0x33, 0x34
     ]
 
-    // Hologram target filenames differ per game — stored separately
-    // FF:    "shaders.HPt9DZviTSXL9hpGW9QNOMigNLA~3D"
-    private static let _hlFF: [UInt8] = [
-        0x29, 0x32, 0x3b, 0x3e, 0x3f, 0x28, 0x29, 0x74,
-        0x12, 0x0a, 0x2e, 0x63, 0x1e, 0x00, 0x2c, 0x33,
-        0x0e, 0x09, 0x02, 0x16, 0x63, 0x32, 0x2a, 0x1d,
-        0x0d, 0x63, 0x0b, 0x14, 0x15, 0x17, 0x33, 0x3d,
-        0x14, 0x16, 0x1b, 0x24, 0x69, 0x1e
-    ]
-
-    // FFMax: "shaders.RXqs706xmtWYhbN9TqDzP8LDRzk~3D"
-    private static let _hlFFMax: [UInt8] = [
-        0x29, 0x32, 0x3b, 0x3e, 0x3f, 0x28, 0x29, 0x74,
-        0x08, 0x02, 0x2b, 0x29, 0x6d, 0x6a, 0x6c, 0x22,
-        0x37, 0x2e, 0x0d, 0x03, 0x32, 0x38, 0x14, 0x63,
-        0x0e, 0x2b, 0x1e, 0x20, 0x0a, 0x62, 0x16, 0x1e,
-        0x08, 0x20, 0x31, 0x24, 0x69, 0x1e
-    ]
-
-    // Regular cheat features target filename (cache_res.*)
     // "cache_res.CfnFf59sr1SbsqQ6JqTKsEusjKs~3D"
     private static let _tf: [UInt8] = [
         0x39, 0x3b, 0x39, 0x32, 0x3f, 0x05, 0x28, 0x3f, 0x29, 0x74, 0x19, 0x3c,
@@ -102,47 +103,51 @@ enum FFCheatManifest {
         0x29, 0x24, 0x69, 0x1e
     ]
 
-    static var repoBase:      String { _X.d(_rb) }
+    static var repoBase:       String { _X.d(_rb) }
     static var targetFileName: String { _X.d(_tf) }
 
-    static func hologramFileName(game: FFGame) -> String {
+    private static func gameSegment(_ game: FFGame) -> String {
         switch game {
-        case .freeFire:    return _X.d(_hlFF)
-        case .freefireMax: return _X.d(_hlFFMax)
+        case .freeFire:    return "Free%20Fire"
+        case .freefireMax: return "Free%20Fire%20Max"
         }
     }
 
-    static func rawURL(game: FFGame, feature: FFFeature) -> URL? {
-        let gamePath: String
-        switch game {
-        case .freeFire:    gamePath = "Free%20Fire"
-        case .freefireMax: gamePath = "Free%20Fire%20Max"
-        }
-        let fileName = (feature == .hologram) ? hologramFileName(game: game) : targetFileName
-        let urlString = "\(repoBase)/\(gamePath)/\(feature.folderName)/\(fileName)"
-        return URL(string: urlString)
+    static func rawURL(game: FFGame, feature: FFFeature, fileName: String? = nil) -> URL? {
+        let name = fileName ?? targetFileName
+        return URL(string: "\(repoBase)/\(gameSegment(game))/\(feature.folderName)/\(name)")
     }
 
     static func checkAvailability(game: FFGame, feature: FFFeature) async -> Bool {
+        if feature.isESP {
+            for name in ESPFiles.all {
+                guard let url = rawURL(game: game, feature: feature, fileName: name) else { return false }
+                var req = URLRequest(url: url)
+                req.httpMethod = "HEAD"
+                req.timeoutInterval = 8
+                do {
+                    let (_, r) = try await URLSession.shared.data(for: req)
+                    if (r as? HTTPURLResponse)?.statusCode != 200 { return false }
+                } catch { return false }
+            }
+            return true
+        }
         guard let url = rawURL(game: game, feature: feature) else { return false }
         var req = URLRequest(url: url)
         req.httpMethod = "HEAD"
         req.timeoutInterval = 8
         do {
-            let (_, response) = try await URLSession.shared.data(for: req)
-            return (response as? HTTPURLResponse)?.statusCode == 200
-        } catch {
-            return false
-        }
+            let (_, r) = try await URLSession.shared.data(for: req)
+            return (r as? HTTPURLResponse)?.statusCode == 200
+        } catch { return false }
     }
 
-    static func download(game: FFGame, feature: FFFeature) async throws -> Data {
-        guard let url = rawURL(game: game, feature: feature) else {
+    static func download(game: FFGame, feature: FFFeature, fileName: String? = nil) async throws -> Data {
+        guard let url = rawURL(game: game, feature: feature, fileName: fileName) else {
             throw FFCheatError.fileUnavailable
         }
-        let req = URLRequest(url: url, timeoutInterval: 30)
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+        let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 30))
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw FFCheatError.fileUnavailable
         }
         return data
@@ -177,96 +182,118 @@ enum FFCheatError: LocalizedError {
 
 enum FFCheatService {
 
-    // Returns the target URL inside the game container.
-    // Hologram uses Optional/ios/gameassetbundles with its unique shader filename.
-    // All other features use Compulsory/ios/gameassetbundles with the cache_res filename.
-    static func targetURL(containerPath: String, feature: FFFeature, game: FFGame) -> URL {
-        let base = URL(fileURLWithPath: containerPath, isDirectory: true)
-            .appendingPathComponent("Documents/contentcache")
+    // MARK: Paths
 
-        switch feature {
-        case .hologram:
-            return base
-                .appendingPathComponent("Optional/ios/gameassetbundles")
-                .appendingPathComponent(FFCheatManifest.hologramFileName(game: game))
-        default:
-            return base
-                .appendingPathComponent("Compulsory/ios/gameassetbundles")
-                .appendingPathComponent(FFCheatManifest.targetFileName)
-        }
+    static func cacheResTargetURL(containerPath: String, game: FFGame) -> URL {
+        URL(fileURLWithPath: containerPath, isDirectory: true)
+            .appendingPathComponent("Documents/contentcache/Compulsory/ios/gameassetbundles")
+            .appendingPathComponent(FFCheatManifest.targetFileName)
     }
 
-    // Backup key includes feature name so hologram & regular features don't collide
     static func backupURL(bundleID: String, feature: FFFeature) -> URL {
-        let fileName: String
-        switch feature {
-        case .hologram:
-            fileName = "\(bundleID)_hologram_\(feature.rawValue).bak"
-        default:
-            fileName = "\(bundleID)_\(FFCheatManifest.targetFileName).bak"
-        }
-        return URL(fileURLWithPath: AppPaths.backups, isDirectory: true)
-            .appendingPathComponent(fileName)
+        let backupsDir = (NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? "/tmp")
+            + "/ffext_backups"
+        try? FileManager.default.createDirectory(atPath: backupsDir, withIntermediateDirectories: true)
+        return URL(fileURLWithPath: backupsDir)
+            .appendingPathComponent("\(bundleID)_\(FFCheatManifest.targetFileName).bak")
+    }
+
+    static func espBackupDir(bundleID: String) -> URL {
+        let backupsDir = (NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? "/tmp")
+            + "/ffext_backups"
+        try? FileManager.default.createDirectory(atPath: backupsDir, withIntermediateDirectories: true)
+        return URL(fileURLWithPath: backupsDir)
+            .appendingPathComponent("\(bundleID)_esp_backup")
     }
 
     static func hasBackup(bundleID: String) -> Bool {
-        // Check any feature backup exists (regular or hologram)
-        for feature in FFFeature.allCases {
-            if FileManager.default.fileExists(atPath: backupURL(bundleID: bundleID, feature: feature).path) {
-                return true
-            }
+        let fm = FileManager.default
+        for feature in FFFeature.allCases where !feature.isESP {
+            if fm.fileExists(atPath: backupURL(bundleID: bundleID, feature: feature).path) { return true }
         }
-        return false
+        return fm.fileExists(atPath: espBackupDir(bundleID: bundleID).path)
     }
 
-    // MARK: Inject
+    // MARK: Inject (entry)
 
     static func inject(game: FFGame, feature: FFFeature) async throws {
         let bundleID = game.bundleID
-
         guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
             throw FFCheatError.containerNotFound(bundleID)
         }
-
         let handle = ContainerStore.grantContainerAccess(containerPath)
         defer { if handle >= 0 { bad_query_release(handle) } }
 
-        let target = targetURL(containerPath: containerPath, feature: feature, game: game)
+        if feature.isESP {
+            try await injectESP(game: game, bundleID: bundleID, containerPath: containerPath)
+        } else {
+            try await injectRegular(game: game, feature: feature, bundleID: bundleID, containerPath: containerPath)
+        }
+    }
+
+    // MARK: Regular inject — replace cache_res file
+
+    private static func injectRegular(
+        game: FFGame,
+        feature: FFFeature,
+        bundleID: String,
+        containerPath: String
+    ) async throws {
+        let target = cacheResTargetURL(containerPath: containerPath, game: game)
         let fm = FileManager.default
 
-        guard fm.fileExists(atPath: target.path) else {
-            throw FFCheatError.targetFileMissing
-        }
+        guard fm.fileExists(atPath: target.path) else { throw FFCheatError.targetFileMissing }
 
         let backup = backupURL(bundleID: bundleID, feature: feature)
         if !fm.fileExists(atPath: backup.path) {
-            do {
-                try fm.copyItem(at: target, to: backup)
-                log("backed up \(bundleID)/\(feature.rawValue) -> \(backup.lastPathComponent)")
-            } catch {
-                throw FFCheatError.backupFailed
-            }
+            do { try fm.copyItem(at: target, to: backup) }
+            catch { throw FFCheatError.backupFailed }
         }
 
-        let cheatData = try await FFCheatManifest.download(game: game, feature: feature)
-        log("downloaded \(feature.rawValue) (\(cheatData.count) bytes)")
+        let data = try await FFCheatManifest.download(game: game, feature: feature)
+        let tmp  = target.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString)")
 
-        let tmpURL = target.deletingLastPathComponent()
-            .appendingPathComponent(".\(UUID().uuidString)")
+        guard fm.createFile(atPath: tmp.path, contents: data) else {
+            throw FFCheatError.replacementFailed("createFile failed")
+        }
+        guard rename(tmp.path, target.path) == 0 else {
+            try? fm.removeItem(at: tmp)
+            throw FFCheatError.replacementFailed("rename errno=\(errno)")
+        }
+        log("inject OK \(bundleID) \(feature.rawValue)")
+    }
 
-        do {
-            guard fm.createFile(atPath: tmpURL.path, contents: cheatData) else {
-                throw FFCheatError.replacementFailed("createFile failed")
+    // MARK: ESP inject — tambah 3 file ke Documents/
+
+    private static func injectESP(
+        game: FFGame,
+        bundleID: String,
+        containerPath: String
+    ) async throws {
+        let fm      = FileManager.default
+        let docsURL = URL(fileURLWithPath: containerPath).appendingPathComponent("Documents")
+        let bkpDir  = espBackupDir(bundleID: bundleID)
+        try? fm.createDirectory(at: bkpDir, withIntermediateDirectories: true)
+
+        for fileName in ESPFiles.all {
+            let dest   = docsURL.appendingPathComponent(fileName)
+            let bkpFile = bkpDir.appendingPathComponent(fileName)
+
+            // Backup kalau file asal ada
+            if fm.fileExists(atPath: dest.path) && !fm.fileExists(atPath: bkpFile.path) {
+                try? fm.copyItem(at: dest, to: bkpFile)
             }
-            guard rename(tmpURL.path, target.path) == 0 else {
-                try? fm.removeItem(at: tmpURL)
-                throw FFCheatError.replacementFailed("rename errno=\(errno)")
+
+            let data = try await FFCheatManifest.download(game: game, feature: .esp, fileName: fileName)
+            let tmp  = docsURL.appendingPathComponent(".\(UUID().uuidString)")
+            guard fm.createFile(atPath: tmp.path, contents: data) else {
+                throw FFCheatError.replacementFailed("createFile failed: \(fileName)")
             }
-            log("inject OK \(bundleID) \(feature.rawValue)")
-        } catch let e as FFCheatError {
-            throw e
-        } catch {
-            throw FFCheatError.replacementFailed(error.localizedDescription)
+            guard rename(tmp.path, dest.path) == 0 else {
+                try? fm.removeItem(at: tmp)
+                throw FFCheatError.replacementFailed("rename failed: \(fileName)")
+            }
+            log("esp inject OK: \(fileName)")
         }
     }
 
@@ -274,32 +301,45 @@ enum FFCheatService {
 
     static func restore(game: FFGame) throws {
         let bundleID = game.bundleID
-
         guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
             throw FFCheatError.containerNotFound(bundleID)
         }
-
         let handle = ContainerStore.grantContainerAccess(containerPath)
         defer { if handle >= 0 { bad_query_release(handle) } }
 
-        // Restore all backed-up features for this game
+        let fm = FileManager.default
         var anyRestored = false
-        for feature in FFFeature.allCases {
+
+        // Restore regular features
+        for feature in FFFeature.allCases where !feature.isESP {
             let backup = backupURL(bundleID: bundleID, feature: feature)
-            guard FileManager.default.fileExists(atPath: backup.path) else { continue }
-            let target = targetURL(containerPath: containerPath, feature: feature, game: game)
-            do {
-                _ = try FileReplacementService.replace(target: target, with: backup)
-                try? FileManager.default.removeItem(at: backup)
-                log("restore OK \(bundleID)/\(feature.rawValue)")
-                anyRestored = true
-            } catch {
-                throw FFCheatError.restoreFailed
-            }
+            guard fm.fileExists(atPath: backup.path) else { continue }
+            let target = cacheResTargetURL(containerPath: containerPath, game: game)
+            _ = try? FileReplacementService.replace(target: target, with: backup)
+            try? fm.removeItem(at: backup)
+            log("restore OK \(bundleID)/\(feature.rawValue)")
+            anyRestored = true
         }
 
-        if !anyRestored {
-            throw FFCheatError.noBackup
+        // ESP restore — delete 3 file (kalau ada backup, restore; kalau takde, delete je)
+        let docsURL = URL(fileURLWithPath: containerPath).appendingPathComponent("Documents")
+        let bkpDir  = espBackupDir(bundleID: bundleID)
+
+        if fm.fileExists(atPath: bkpDir.path) {
+            for fileName in ESPFiles.all {
+                let dest    = docsURL.appendingPathComponent(fileName)
+                let bkpFile = bkpDir.appendingPathComponent(fileName)
+                if fm.fileExists(atPath: bkpFile.path) {
+                    _ = try? FileReplacementService.replace(target: dest, with: bkpFile)
+                } else {
+                    try? fm.removeItem(at: dest)
+                }
+                log("esp restore: \(fileName)")
+            }
+            try? fm.removeItem(at: bkpDir)
+            anyRestored = true
         }
+
+        if !anyRestored { throw FFCheatError.noBackup }
     }
 }
