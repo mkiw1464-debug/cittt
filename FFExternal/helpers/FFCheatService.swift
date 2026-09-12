@@ -18,47 +18,41 @@ enum FFGame: String, CaseIterable {
     var bundleID: String {
         switch self {
         case .freeFire:
-            // "com.dts.freefireth"
-            return _X.d([0x39, 0x35, 0x37, 0x74, 0x3e, 0x2e, 0x29, 0x74,
-                         0x3c, 0x28, 0x3f, 0x3f, 0x3c, 0x33, 0x28, 0x3f, 0x2e, 0x32])
+            return _X.d([0x39,0x35,0x37,0x74,0x3e,0x2e,0x29,0x74,
+                         0x3c,0x28,0x3f,0x3f,0x3c,0x33,0x28,0x3f,0x2e,0x32])
         case .freefireMax:
-            // "com.dts.freefiremax"
-            return _X.d([0x39, 0x35, 0x37, 0x74, 0x3e, 0x2e, 0x29, 0x74,
-                         0x3c, 0x28, 0x3f, 0x3f, 0x3c, 0x33, 0x28, 0x3f, 0x37, 0x3b, 0x22])
+            return _X.d([0x39,0x35,0x37,0x74,0x3e,0x2e,0x29,0x74,
+                         0x3c,0x28,0x3f,0x3f,0x3c,0x33,0x28,0x3f,0x37,0x3b,0x22])
         }
     }
 
-    // "Library/Preferences/com.dts.freefireth.plist"
-    // "Library/Preferences/com.dts.freefiremax.plist"
     var plistRelativePath: String {
         switch self {
         case .freeFire:
-            return _X.d([0x16, 0x33, 0x38, 0x28, 0x3b, 0x28, 0x23, 0x75, 0x0a,
-                         0x28, 0x3f, 0x3c, 0x3f, 0x28, 0x3f, 0x34, 0x39, 0x3f, 0x29,
-                         0x75, 0x39, 0x35, 0x37, 0x74, 0x3e, 0x2e, 0x29, 0x74, 0x3c,
-                         0x28, 0x3f, 0x3f, 0x3c, 0x33, 0x28, 0x3f, 0x2e, 0x32, 0x74,
-                         0x2a, 0x36, 0x33, 0x29, 0x2e])
+            return _X.d([0x16,0x33,0x38,0x28,0x3b,0x28,0x23,0x75,0x0a,
+                         0x28,0x3f,0x3c,0x3f,0x28,0x3f,0x34,0x39,0x3f,0x29,
+                         0x75,0x39,0x35,0x37,0x74,0x3e,0x2e,0x29,0x74,0x3c,
+                         0x28,0x3f,0x3f,0x3c,0x33,0x28,0x3f,0x2e,0x32,0x74,
+                         0x2a,0x36,0x33,0x29,0x2e])
         case .freefireMax:
-            return _X.d([0x16, 0x33, 0x38, 0x28, 0x3b, 0x28, 0x23, 0x75, 0x0a,
-                         0x28, 0x3f, 0x3c, 0x3f, 0x28, 0x3f, 0x34, 0x39, 0x3f, 0x29,
-                         0x75, 0x39, 0x35, 0x37, 0x74, 0x3e, 0x2e, 0x29, 0x74, 0x3c,
-                         0x28, 0x3f, 0x3f, 0x3c, 0x33, 0x28, 0x3f, 0x37, 0x3b, 0x22,
-                         0x74, 0x2a, 0x36, 0x33, 0x29, 0x2e])
+            return _X.d([0x16,0x33,0x38,0x28,0x3b,0x28,0x23,0x75,0x0a,
+                         0x28,0x3f,0x3c,0x3f,0x28,0x3f,0x34,0x39,0x3f,0x29,
+                         0x75,0x39,0x35,0x37,0x74,0x3e,0x2e,0x29,0x74,0x3c,
+                         0x28,0x3f,0x3f,0x3c,0x33,0x28,0x3f,0x37,0x3b,0x22,
+                         0x74,0x2a,0x36,0x33,0x29,0x2e])
         }
     }
 
-    // plist file name sahaja (untuk download dari GitHub)
-    // "com.dts.freefireth.plist" / "com.dts.freefiremax.plist"
     var plistFileName: String {
         switch self {
         case .freeFire:
-            return _X.d([0x39, 0x35, 0x37, 0x74, 0x3e, 0x2e, 0x29, 0x74, 0x3c,
-                         0x28, 0x3f, 0x3f, 0x3c, 0x33, 0x28, 0x3f, 0x2e, 0x32, 0x74,
-                         0x2a, 0x36, 0x33, 0x29, 0x2e])
+            return _X.d([0x39,0x35,0x37,0x74,0x3e,0x2e,0x29,0x74,0x3c,
+                         0x28,0x3f,0x3f,0x3c,0x33,0x28,0x3f,0x2e,0x32,0x74,
+                         0x2a,0x36,0x33,0x29,0x2e])
         case .freefireMax:
-            return _X.d([0x39, 0x35, 0x37, 0x74, 0x3e, 0x2e, 0x29, 0x74, 0x3c,
-                         0x28, 0x3f, 0x3f, 0x3c, 0x33, 0x28, 0x3f, 0x37, 0x3b, 0x22,
-                         0x74, 0x2a, 0x36, 0x33, 0x29, 0x2e])
+            return _X.d([0x39,0x35,0x37,0x74,0x3e,0x2e,0x29,0x74,0x3c,
+                         0x28,0x3f,0x3f,0x3c,0x33,0x28,0x3f,0x37,0x3b,0x22,
+                         0x74,0x2a,0x36,0x33,0x29,0x2e])
         }
     }
 
@@ -70,72 +64,40 @@ enum FFGame: String, CaseIterable {
     }
 }
 
-enum FFFeature: String, CaseIterable {
-    case aimBody     = "AimBody"
-    case aimNeck     = "AimNeck"
-    case aimDrag     = "AimDrag"
-    case magicBullet = "MagicBullet"
-    case aimChest    = "AimChest"
-    case esp         = "ESP"
-
-    var folderName: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .aimBody:     return "AimBody"
-        case .aimNeck:     return "AimNeck"
-        case .aimDrag:     return "AimDrag"
-        case .magicBullet: return "Magic Bullet"
-        case .aimChest:    return "AimChest"
-        case .esp:         return "ESP"
-        }
-    }
-
-    var isESP: Bool { self == .esp }
-}
-
-// MARK: - ESP Documents Files (delete on restore)
-// 3 file ini — inject, delete terus bila restore (takde backup)
+// MARK: - Documents filenames (obfuscated same as original)
 
 private enum ESPFiles {
-    // "config.bin"
-    private static let _cfg:   [UInt8] = [0x39, 0x35, 0x34, 0x3c, 0x33, 0x3d, 0x74, 0x38, 0x33, 0x34]
-    // "localConfig.json"
-    private static let _local: [UInt8] = [0x36, 0x35, 0x39, 0x3b, 0x36, 0x19, 0x35, 0x34, 0x3c, 0x33,
-                                           0x3d, 0x74, 0x30, 0x29, 0x35, 0x34]
-    // "Assembly-CSharp-patch.bytes"
-    private static let _patch: [UInt8] = [0x1b, 0x29, 0x29, 0x3f, 0x37, 0x38, 0x36, 0x23, 0x77, 0x19,
-                                           0x09, 0x32, 0x3b, 0x28, 0x2a, 0x77, 0x2a, 0x3b, 0x2e, 0x39,
-                                           0x32, 0x74, 0x38, 0x23, 0x2e, 0x3f, 0x29]
+    private static let _cfg:   [UInt8] = [0x39,0x35,0x34,0x3c,0x33,0x3d,0x74,0x38,0x33,0x34]
+    private static let _local: [UInt8] = [0x36,0x35,0x39,0x3b,0x36,0x19,0x35,0x34,0x3c,0x33,
+                                           0x3d,0x74,0x30,0x29,0x35,0x34]
+    private static let _patch: [UInt8] = [0x1b,0x29,0x29,0x3f,0x37,0x38,0x36,0x23,0x77,0x19,
+                                           0x09,0x32,0x3b,0x28,0x2a,0x77,0x2a,0x3b,0x2e,0x39,
+                                           0x32,0x74,0x38,0x23,0x2e,0x3f,0x29]
 
     static var configBin:   String { _X.d(_cfg) }
     static var localConfig: String { _X.d(_local) }
     static var patchBytes:  String { _X.d(_patch) }
-    // 3 file Documents — delete on restore
     static var documentsFiles: [String] { [configBin, localConfig, patchBytes] }
 }
 
-// MARK: - GitHub Manifest
+// MARK: - GitHub Manifest (unchanged from original)
 
 enum FFCheatManifest {
-    // "https://raw.githubusercontent.com/mkiw1464-debug/citbaru/main"
     private static let _rb: [UInt8] = [
-        0x32, 0x2e, 0x2e, 0x2a, 0x29, 0x60, 0x75, 0x75,
-        0x28, 0x3b, 0x2d, 0x74, 0x3d, 0x33, 0x2e, 0x32,
-        0x2f, 0x38, 0x2f, 0x29, 0x3f, 0x28, 0x39, 0x35,
-        0x34, 0x2e, 0x3f, 0x34, 0x2e, 0x74, 0x39, 0x35,
-        0x37, 0x75, 0x37, 0x31, 0x33, 0x2d, 0x6b, 0x6e,
-        0x6c, 0x6e, 0x77, 0x3e, 0x3f, 0x38, 0x2f, 0x3d,
-        0x75, 0x39, 0x33, 0x2e, 0x38, 0x3b, 0x28, 0x2f,
-        0x75, 0x37, 0x3b, 0x33, 0x34
+        0x32,0x2e,0x2e,0x2a,0x29,0x60,0x75,0x75,
+        0x28,0x3b,0x2d,0x74,0x3d,0x33,0x2e,0x32,
+        0x2f,0x38,0x2f,0x29,0x3f,0x28,0x29,0x35,
+        0x34,0x2e,0x3f,0x34,0x2e,0x74,0x39,0x35,
+        0x37,0x75,0x37,0x31,0x33,0x2d,0x6b,0x6e,
+        0x6c,0x6e,0x77,0x3e,0x3f,0x38,0x2f,0x3d,
+        0x75,0x39,0x33,0x2e,0x38,0x3b,0x28,0x2f,
+        0x75,0x37,0x3b,0x33,0x34
     ]
-
-    // "cache_res.CfnFf59sr1SbsqQ6JqTKsEusjKs~3D"
     private static let _tf: [UInt8] = [
-        0x39, 0x3b, 0x39, 0x32, 0x3f, 0x05, 0x28, 0x3f, 0x29, 0x74, 0x19, 0x3c,
-        0x34, 0x1c, 0x3c, 0x6f, 0x63, 0x29, 0x28, 0x6b, 0x09, 0x38, 0x29, 0x2b,
-        0x0b, 0x6c, 0x10, 0x2b, 0x0e, 0x11, 0x29, 0x1f, 0x2f, 0x29, 0x30, 0x11,
-        0x29, 0x24, 0x69, 0x1e
+        0x39,0x3b,0x39,0x32,0x3f,0x05,0x28,0x3f,0x29,0x74,0x19,0x3c,
+        0x34,0x1c,0x3c,0x6f,0x63,0x29,0x28,0x6b,0x09,0x38,0x29,0x2b,
+        0x0b,0x6c,0x10,0x2b,0x0e,0x11,0x29,0x1f,0x2f,0x29,0x30,0x11,
+        0x29,0x24,0x69,0x1e
     ]
 
     static var repoBase:       String { _X.d(_rb) }
@@ -155,13 +117,10 @@ enum FFCheatManifest {
 
     static func checkAvailability(game: FFGame, feature: FFFeature) async -> Bool {
         if feature.isESP {
-            // Check 3 Documents files + plist
             let filesToCheck = ESPFiles.documentsFiles + [game.plistFileName]
             for name in filesToCheck {
                 guard let url = rawURL(game: game, feature: feature, fileName: name) else { return false }
-                var req = URLRequest(url: url)
-                req.httpMethod = "HEAD"
-                req.timeoutInterval = 8
+                var req = URLRequest(url: url); req.httpMethod = "HEAD"; req.timeoutInterval = 8
                 do {
                     let (_, r) = try await URLSession.shared.data(for: req)
                     if (r as? HTTPURLResponse)?.statusCode != 200 { return false }
@@ -170,9 +129,7 @@ enum FFCheatManifest {
             return true
         }
         guard let url = rawURL(game: game, feature: feature) else { return false }
-        var req = URLRequest(url: url)
-        req.httpMethod = "HEAD"
-        req.timeoutInterval = 8
+        var req = URLRequest(url: url); req.httpMethod = "HEAD"; req.timeoutInterval = 8
         do {
             let (_, r) = try await URLSession.shared.data(for: req)
             return (r as? HTTPURLResponse)?.statusCode == 200
@@ -184,11 +141,19 @@ enum FFCheatManifest {
             throw FFCheatError.fileUnavailable
         }
         let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 30))
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw FFCheatError.fileUnavailable
-        }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw FFCheatError.fileUnavailable }
         return data
     }
+}
+
+// MARK: - FFFeature
+
+enum FFFeature: String, CaseIterable {
+    case esp         = "ESP"
+
+    var folderName:   String { rawValue }
+    var displayName:  String { "ESP" }
+    var isESP:        Bool   { true }
 }
 
 // MARK: - Errors
@@ -204,18 +169,18 @@ enum FFCheatError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .containerNotFound(let id): return "App container not found: \(id)"
-        case .fileUnavailable:           return "Cheat file unavailable (check GitHub)"
-        case .targetFileMissing:         return "Target game asset file not found"
-        case .replacementFailed(let r):  return "File replacement failed: \(r)"
-        case .backupFailed:              return "Failed to create backup"
-        case .restoreFailed:             return "Failed to restore original file"
-        case .noBackup:                  return "No backup found — inject first"
+        case .containerNotFound(let id): return "Container not found: \(id)"
+        case .fileUnavailable:           return "Cheat file unavailable"
+        case .targetFileMissing:         return "Target file not found"
+        case .replacementFailed(let r):  return "Replace failed: \(r)"
+        case .backupFailed:              return "Backup failed"
+        case .restoreFailed:             return "Restore failed"
+        case .noBackup:                  return "No backup — inject first"
         }
     }
 }
 
-// MARK: - Backup helpers
+// MARK: - Backups
 
 private enum Backups {
     static var dir: String {
@@ -224,52 +189,33 @@ private enum Backups {
         try? FileManager.default.createDirectory(atPath: p, withIntermediateDirectories: true)
         return p
     }
-
-    static func cacheResURL(bundleID: String) -> URL {
-        URL(fileURLWithPath: dir).appendingPathComponent("\(bundleID)_cache_res.bak")
-    }
-
-    // Backup plist — 1 file, replace/restore
     static func plistURL(bundleID: String) -> URL {
         URL(fileURLWithPath: dir).appendingPathComponent("\(bundleID)_plist.bak")
     }
 }
 
-// MARK: - Inject / Restore Service
+// MARK: - FFCheatService
 
 enum FFCheatService {
-
-    // MARK: Paths
-
-    static func cacheResTargetURL(containerPath: String) -> URL {
-        URL(fileURLWithPath: containerPath)
-            .appendingPathComponent("Documents/contentcache/Compulsory/ios/gameassetbundles")
-            .appendingPathComponent(FFCheatManifest.targetFileName)
-    }
-
-    static func plistTargetURL(containerPath: String, game: FFGame) -> URL {
-        URL(fileURLWithPath: containerPath)
-            .appendingPathComponent(game.plistRelativePath)
-    }
 
     static func espDocsURL(containerPath: String) -> URL {
         URL(fileURLWithPath: containerPath).appendingPathComponent("Documents")
     }
 
-    // MARK: Has Backup
-
-    static func hasBackup(bundleID: String) -> Bool {
-        let fm = FileManager.default
-        // Regular features backup
-        if fm.fileExists(atPath: Backups.cacheResURL(bundleID: bundleID).path) { return true }
-        // ESP: plist backup wujud = ESP pernah inject
-        if fm.fileExists(atPath: Backups.plistURL(bundleID: bundleID).path) { return true }
-        return false
+    static func plistTargetURL(containerPath: String, game: FFGame) -> URL {
+        URL(fileURLWithPath: containerPath).appendingPathComponent(game.plistRelativePath)
     }
 
-    // MARK: Inject (entry)
+    static func hasBackup(bundleID: String) -> Bool {
+        FileManager.default.fileExists(atPath: Backups.plistURL(bundleID: bundleID).path)
+    }
 
-    static func inject(game: FFGame, feature: FFFeature) async throws {
+    // MARK: - Write config files dari CheatConfig (ON/OFF buttons)
+    // Dipanggil setiap kali user toggle feature — tulis terus ke container.
+    // TIDAK download apa-apa. TIDAK inject baru.
+    // Assembly-CSharp-patch.bytes mesti dah ada (dari inject pertama).
+
+    static func applyConfig(_ cfg: CheatConfig, game: FFGame) throws {
         let bundleID = game.bundleID
         guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
             throw FFCheatError.containerNotFound(bundleID)
@@ -277,98 +223,86 @@ enum FFCheatService {
         let handle = ContainerStore.grantContainerAccess(containerPath)
         defer { if handle >= 0 { bad_query_release(handle) } }
 
-        if feature.isESP {
-            try await injectESP(game: game, bundleID: bundleID, containerPath: containerPath)
-        } else {
-            try await injectRegular(game: game, feature: feature, bundleID: bundleID, containerPath: containerPath)
-        }
-    }
-
-    // MARK: Regular inject — replace cache_res
-
-    private static func injectRegular(
-        game: FFGame,
-        feature: FFFeature,
-        bundleID: String,
-        containerPath: String
-    ) async throws {
-        let target = cacheResTargetURL(containerPath: containerPath)
         let fm = FileManager.default
 
-        guard fm.fileExists(atPath: target.path) else { throw FFCheatError.targetFileMissing }
+        // 1. config.bin → Documents/
+        let docsURL = espDocsURL(containerPath: containerPath)
+        try fm.createDirectory(at: docsURL, withIntermediateDirectories: true)
+        try cfg.buildConfigBin()
+            .write(to: docsURL.appendingPathComponent(ESPFiles.configBin), options: .atomic)
 
-        let backup = Backups.cacheResURL(bundleID: bundleID)
-        if !fm.fileExists(atPath: backup.path) {
-            do { try fm.copyItem(at: target, to: backup) }
-            catch { throw FFCheatError.backupFailed }
-        }
+        // 2. localConfig.json → Documents/
+        try cfg.buildLocalConfigJSON()
+            .write(to: docsURL.appendingPathComponent(ESPFiles.localConfig), options: .atomic)
 
-        let data = try await FFCheatManifest.download(game: game, feature: feature)
-        let tmp  = target.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString)")
-        guard fm.createFile(atPath: tmp.path, contents: data) else {
-            throw FFCheatError.replacementFailed("createFile failed")
+        // 3. plist → Library/Preferences/
+        let plistTarget = plistTargetURL(containerPath: containerPath, game: game)
+        try fm.createDirectory(
+            at: plistTarget.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+
+        // Read existing plist to preserve game keys, then merge cheat keys on top
+        let existingData = fm.fileExists(atPath: plistTarget.path)
+            ? try? Data(contentsOf: plistTarget)
+            : nil
+
+        var base: [String: Any] = [:]
+        if let d = existingData,
+           let parsed = try? PropertyListSerialization.propertyList(from: d, options: [], format: nil)
+            as? [String: Any] {
+            base = parsed
         }
-        guard rename(tmp.path, target.path) == 0 else {
-            try? fm.removeItem(at: tmp)
-            throw FFCheatError.replacementFailed("rename errno=\(errno)")
-        }
-        log("inject OK \(bundleID) \(feature.rawValue)")
+        let merged = cfg.buildPlistDict(base: base)
+        let plistData = try PropertyListSerialization.data(
+            fromPropertyList: merged, format: .xml, options: 0)
+        try plistData.write(to: plistTarget, options: .atomic)
+
+        log("ffext: config applied \(bundleID)")
     }
 
-    // MARK: ESP inject — 3 file Documents (delete on restore) + 1 plist (replace/restore)
+    // MARK: - First inject (downloads Assembly-CSharp-patch.bytes + initial files)
+    // Dipanggil sekali je bila user tekan INJECT buat pertama kali.
+    // Lepas ni, guna applyConfig untuk update features.
 
-    private static func injectESP(
-        game: FFGame,
-        bundleID: String,
-        containerPath: String
-    ) async throws {
+    static func inject(game: FFGame, cfg: CheatConfig) async throws {
+        let bundleID = game.bundleID
+        guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
+            throw FFCheatError.containerNotFound(bundleID)
+        }
+        let handle = ContainerStore.grantContainerAccess(containerPath)
+        defer { if handle >= 0 { bad_query_release(handle) } }
+
         let fm      = FileManager.default
         let docsURL = espDocsURL(containerPath: containerPath)
+        try fm.createDirectory(at: docsURL, withIntermediateDirectories: true)
 
-        // ── 1. Inject 3 Documents files (delete on restore, no backup needed) ──
-        for fileName in ESPFiles.documentsFiles {
-            let dest = docsURL.appendingPathComponent(fileName)
-            let data = try await FFCheatManifest.download(game: game, feature: .esp, fileName: fileName)
-            let tmp  = docsURL.appendingPathComponent(".\(UUID().uuidString)")
-            guard fm.createFile(atPath: tmp.path, contents: data) else {
-                throw FFCheatError.replacementFailed("createFile failed: \(fileName)")
-            }
-            guard rename(tmp.path, dest.path) == 0 else {
-                try? fm.removeItem(at: tmp)
-                throw FFCheatError.replacementFailed("rename failed: \(fileName)")
-            }
-            log("esp docs inject OK: \(fileName)")
+        // 1. Download Assembly-CSharp-patch.bytes dari GitHub
+        let patchData = try await FFCheatManifest.download(game: game, feature: .esp,
+                                                            fileName: ESPFiles.patchBytes)
+        let patchDest = docsURL.appendingPathComponent(ESPFiles.patchBytes)
+        let patchTmp  = docsURL.appendingPathComponent(".\(UUID().uuidString)")
+        guard fm.createFile(atPath: patchTmp.path, contents: patchData) else {
+            throw FFCheatError.replacementFailed("createFile patch")
         }
+        guard rename(patchTmp.path, patchDest.path) == 0 else {
+            try? fm.removeItem(at: patchTmp)
+            throw FFCheatError.replacementFailed("rename patch")
+        }
+        log("ffext: patch.bytes injected")
 
-        // ── 2. Replace plist (backup dulu, replace, restore on off) ──
+        // 2. Write config files (config.bin + localConfig.json + plist) dari user settings
+        try applyConfig(cfg, game: game)
+
+        // 3. Save plist backup supaya boleh restore
         let plistTarget = plistTargetURL(containerPath: containerPath, game: game)
         let plistBackup = Backups.plistURL(bundleID: bundleID)
-
-        // Backup plist asal kalau belum ada
-        if fm.fileExists(atPath: plistTarget.path) && !fm.fileExists(atPath: plistBackup.path) {
-            do { try fm.copyItem(at: plistTarget, to: plistBackup) }
-            catch { throw FFCheatError.backupFailed }
+        if fm.fileExists(atPath: plistTarget.path), !fm.fileExists(atPath: plistBackup.path) {
+            try? fm.copyItem(at: plistTarget, to: plistBackup)
         }
-
-        // Pastikan folder Preferences wujud
-        try? fm.createDirectory(
-            at: plistTarget.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-
-        let plistData = try await FFCheatManifest.download(game: game, feature: .esp, fileName: game.plistFileName)
-        let plistTmp  = plistTarget.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString)")
-        guard fm.createFile(atPath: plistTmp.path, contents: plistData) else {
-            throw FFCheatError.replacementFailed("createFile failed: plist")
-        }
-        guard rename(plistTmp.path, plistTarget.path) == 0 else {
-            try? fm.removeItem(at: plistTmp)
-            throw FFCheatError.replacementFailed("rename failed: plist")
-        }
-        log("esp plist inject OK: \(game.plistFileName)")
+        log("ffext: inject complete \(bundleID)")
     }
 
-    // MARK: Restore
+    // MARK: - Restore (buang semua cheat files, restore plist asal)
 
     static func restore(game: FFGame) throws {
         let bundleID = game.bundleID
@@ -379,37 +313,19 @@ enum FFCheatService {
         defer { if handle >= 0 { bad_query_release(handle) } }
 
         let fm = FileManager.default
-        var anyRestored = false
-
-        // ── Regular features restore ──
-        let cacheBackup = Backups.cacheResURL(bundleID: bundleID)
-        if fm.fileExists(atPath: cacheBackup.path) {
-            let target = cacheResTargetURL(containerPath: containerPath)
-            _ = try? FileReplacementService.replace(target: target, with: cacheBackup)
-            try? fm.removeItem(at: cacheBackup)
-            log("restore OK \(bundleID) cache_res")
-            anyRestored = true
-        }
-
-        // ── ESP restore ──
         let plistBackup = Backups.plistURL(bundleID: bundleID)
-        if fm.fileExists(atPath: plistBackup.path) {
-            // 1. Delete 3 Documents files terus
-            let docsURL = espDocsURL(containerPath: containerPath)
-            for fileName in ESPFiles.documentsFiles {
-                let dest = docsURL.appendingPathComponent(fileName)
-                try? fm.removeItem(at: dest)
-                log("esp docs removed: \(fileName)")
-            }
+        guard fm.fileExists(atPath: plistBackup.path) else { throw FFCheatError.noBackup }
 
-            // 2. Restore plist asal
-            let plistTarget = plistTargetURL(containerPath: containerPath, game: game)
-            _ = try? FileReplacementService.replace(target: plistTarget, with: plistBackup)
-            try? fm.removeItem(at: plistBackup)
-            log("esp plist restored: \(game.plistFileName)")
-            anyRestored = true
+        // Delete 3 Documents files
+        let docsURL = espDocsURL(containerPath: containerPath)
+        for fileName in ESPFiles.documentsFiles {
+            try? fm.removeItem(at: docsURL.appendingPathComponent(fileName))
         }
 
-        if !anyRestored { throw FFCheatError.noBackup }
+        // Restore plist asal
+        let plistTarget = plistTargetURL(containerPath: containerPath, game: game)
+        _ = try? FileReplacementService.replace(target: plistTarget, with: plistBackup)
+        try? fm.removeItem(at: plistBackup)
+        log("ffext: restore complete \(bundleID)")
     }
 }
