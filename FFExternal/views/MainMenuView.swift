@@ -1,26 +1,41 @@
 import SwiftUI
 
+// MARK: - Sidebar Tab
+
+private enum PXTab: String, CaseIterable {
+    case mira  = "MIRA"
+    case esp   = "ESP"
+    case raioX = "RAIO-X"
+    case geral = "GERAL"
+
+    var icon: String {
+        switch self {
+        case .mira:  return "scope"
+        case .esp:   return "eye"
+        case .raioX: return "cube"
+        case .geral: return "slider.horizontal.3"
+        }
+    }
+}
+
 // MARK: - App State
 
-class FFAppState: ObservableObject {
-    @Published var exploitStatus: ExploitStatus = .notStarted
-    @Published var exploitRunning = false
-    @Published var ffInjected    = false
-    @Published var ffMaxInjected = false
+final class FFAppState: ObservableObject {
+    @Published var exploitStatus:  ExploitStatus = .notStarted
+    @Published var exploitRunning  = false
+    @Published var isInjected      = false
+    @Published var isInjecting     = false
+    @Published var injectError:    String? = nil
+    @Published var applyError:     String? = nil
 
     private var autoRunDone = false
 
-    var isSupported: Bool {
-        if case .unsupported = exploitStatus { return false }
-        return true
-    }
+    var exploitReady: Bool { exploitStatus.isSuccess }
 
     func boot() {
         let v = AppInfo.versionTuple
-        let supported = ExploitSupportPolicy.isSupported(
-            major: v.major, minor: v.minor, patch: v.patch, build: AppInfo.osBuild
-        )
-        if !supported {
+        guard ExploitSupportPolicy.isSupported(
+            major: v.major, minor: v.minor, patch: v.patch, build: AppInfo.osBuild) else {
             exploitStatus = .unsupported("iOS \(AppInfo.osVersion)")
             return
         }
@@ -33,8 +48,7 @@ class FFAppState: ObservableObject {
 
     func runExploit() {
         guard !exploitRunning, !exploitStatus.isSuccess else { return }
-        exploitRunning = true
-        exploitStatus  = .notStarted
+        exploitRunning = true; exploitStatus = .notStarted
         DispatchQueue.global(qos: .userInitiated).async {
             let ok = KernelExploit.run()
             DispatchQueue.main.async {
@@ -46,116 +60,291 @@ class FFAppState: ObservableObject {
         }
     }
 
-    func syncInjectedState() {
-        ffInjected    = LicenseService.storedKey() != nil &&
-            ContainerStore.resolveAppContainerPath(bundleID: FFGame.freeFire.rawValue)
-                .map { _ in FFCheatService.hasBackup(bundleID: FFGame.freeFire.rawValue) } ?? false
-        ffMaxInjected = LicenseService.storedKey() != nil &&
-            ContainerStore.resolveAppContainerPath(bundleID: FFGame.freefireMax.rawValue)
-                .map { _ in FFCheatService.hasBackup(bundleID: FFGame.freefireMax.rawValue) } ?? false
+    func syncInjectedState(game: FFGame) {
+        isInjected = FFCheatService.hasBackup(bundleID: game.bundleID)
+    }
+
+    // First inject — download patch.bytes + tulis config
+    func doInject(game: FFGame, cfg: CheatConfig) {
+        guard !isInjecting else { return }
+        isInjecting = true; injectError = nil
+        Task {
+            do {
+                try await FFCheatService.inject(game: game, cfg: cfg)
+                await MainActor.run { self.isInjecting = false; self.isInjected = true }
+            } catch {
+                await MainActor.run {
+                    self.isInjecting = false
+                    self.injectError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    // Apply config (toggle update) — NO download, just write files
+    func applyConfig(game: FFGame, cfg: CheatConfig) {
+        applyError = nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try FFCheatService.applyConfig(cfg, game: game)
+            } catch {
+                DispatchQueue.main.async { self.applyError = error.localizedDescription }
+            }
+        }
+    }
+
+    func doRestore(game: FFGame) {
+        do {
+            try FFCheatService.restore(game: game)
+            isInjected = false
+        } catch {
+            injectError = error.localizedDescription
+        }
     }
 }
 
-// MARK: - Main Menu
+// MARK: - Main Menu View
 
 struct MainMenuView: View {
-    @Environment(\.ffLanguage) private var lang
-    @StateObject private var state = FFAppState()
-
-    @State private var selectedTab: Int = 0
-    @State private var countdown: String = ""
-    @State private var showLogoutConfirm        = false
-    @State private var showLanguagePicker       = false
-    @State private var showDeepCleanConfirm     = false
-    @State private var deepCleanResult: String? = nil
-    @State private var keyVisible               = false
-
-    // Revalidation ticker — setiap 60 saat check server
-    // supaya mid-session ban/delete auto-logout
-    @State private var revalidateTick: Int = 0
-
     let licenseInfo: LicenseInfo
-    let onLogout: () -> Void
+    let onLogout:    () -> Void
+
+    @StateObject private var appState   = FFAppState()
+    @StateObject private var cfg        = CheatConfig()
+    @State private var selectedTab:     PXTab   = .esp
+    @State private var selectedGame:    FFGame  = .freeFire
+    @State private var countdown:       String  = ""
+    @State private var showLogout       = false
+    @State private var showRestoreAlert = false
+    @State private var revalidateTick   = 0
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
-            FFBackground()
+            PXTheme.backgroundDeep.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 topBar
-                infoCard
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 10)
-                gameTabBar
-                TabView(selection: $selectedTab) {
-                    GameMenuView(
-                        game: .freeFire,
-                        injected: $state.ffInjected,
-                        exploitReady: state.exploitStatus.isSuccess
-                    ).tag(0)
-                    GameMenuView(
-                        game: .freefireMax,
-                        injected: $state.ffMaxInjected,
-                        exploitReady: state.exploitStatus.isSuccess
-                    ).tag(1)
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedTab)
+                Divider().background(PXTheme.separator)
 
-                deepCleanButton
-                telegramBanner
+                HStack(spacing: 0) {
+                    sidebar
+                    Divider().background(PXTheme.separator)
+                    contentArea
+                }
+                .frame(maxHeight: .infinity)
+
+                Divider().background(PXTheme.separator)
+                bottomBar
             }
         }
         .onAppear {
-            state.boot()
-            state.syncInjectedState()
+            appState.boot()
+            appState.syncInjectedState(game: selectedGame)
             refreshCountdown()
         }
         .onReceive(timer) { _ in
             refreshCountdown()
-
-            // Local expiry check tiap saat
             if let exp = licenseInfo.expiryDate, exp < Date() { onLogout() }
-
-            // Server revalidation setiap 60 saat — tangkap ban/delete
             revalidateTick += 1
             if revalidateTick >= 60 {
                 revalidateTick = 0
                 Task {
                     let still = await LicenseService.revalidateBackground(key: licenseInfo.key)
-                    if !still {
-                        await MainActor.run { onLogout() }
-                    }
+                    if !still { await MainActor.run { onLogout() } }
                 }
             }
         }
-        // Logout confirm
-        .alert(lang.t("logout_confirm_title"), isPresented: $showLogoutConfirm) {
-            Button(lang.t("logout_confirm_yes"), role: .destructive) { onLogout() }
-            Button(lang.t("logout_confirm_cancel"), role: .cancel) {}
-        } message: {
-            Text(lang.t("logout_confirm_msg"))
+        .onChange(of: selectedGame) { g in appState.syncInjectedState(game: g) }
+        .alert("Logout?", isPresented: $showLogout) {
+            Button("Logout", role: .destructive) { onLogout() }
+            Button("Batal", role: .cancel) {}
         }
-        // Deep Clean confirm
-        .alert("Deep Clean", isPresented: $showDeepCleanConfirm) {
-            Button("Delete", role: .destructive) { doDeepClean() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will clear Free Fire App Data")
+        .alert("Restore?", isPresented: $showRestoreAlert) {
+            Button("Restore", role: .destructive) { appState.doRestore(game: selectedGame) }
+            Button("Batal", role: .cancel) {}
+        } message: { Text("Ini akan restore semua file game asal.") }
+        .alert(appState.injectError ?? "", isPresented: .init(
+            get: { appState.injectError != nil },
+            set: { if !$0 { appState.injectError = nil } }
+        )) { Button("OK", role: .cancel) {} }
+    }
+
+    // MARK: Top Bar
+
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(PXTheme.accent).frame(width: 40, height: 40)
+                Image(systemName: "scope")
+                    .font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("ProjectX")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(PXTheme.text)
+                Text("PAINEL EXTERNO")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(PXTheme.textSecondary).tracking(1.5)
+            }
+            Spacer()
+
+            // Status pill
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(appState.exploitReady ? PXTheme.online : PXTheme.warn)
+                    .frame(width: 7, height: 7)
+                Text(appState.exploitReady ? "ONLINE" : (appState.exploitRunning ? "LOADING..." : "OFFLINE"))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(PXTheme.text).tracking(1)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(PXTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            // Game picker
+            Menu {
+                ForEach(FFGame.allCases, id: \.self) { g in
+                    Button(g.displayName) { selectedGame = g }
+                }
+            } label: {
+                Text(selectedGame.displayName)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PXTheme.accent)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(PXTheme.accentGlow)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
+            Button { showLogout = true } label: {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(PXTheme.textSecondary)
+                    .frame(width: 38, height: 38)
+                    .background(PXTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }.buttonStyle(.plain)
         }
-        // Deep Clean result toast
-        .alert(deepCleanResult ?? "", isPresented: .init(
-            get: { deepCleanResult != nil },
-            set: { if !$0 { deepCleanResult = nil } }
-        )) {
-            Button("OK", role: .cancel) { deepCleanResult = nil }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(PXTheme.background)
+    }
+
+    // MARK: Sidebar
+
+    private var sidebar: some View {
+        VStack(spacing: 2) {
+            ForEach(PXTab.allCases, id: \.self) { tab in
+                sidebarItem(tab)
+            }
+            Spacer()
         }
-        // Language picker sheet
-        .sheet(isPresented: $showLanguagePicker) {
-            LanguagePickerView(onContinue: { showLanguagePicker = false })
+        .padding(.vertical, 10)
+        .frame(width: PXTheme.sidebarWidth)
+        .background(PXTheme.sidebar)
+    }
+
+    private func sidebarItem(_ tab: PXTab) -> some View {
+        let sel = selectedTab == tab
+        return Button {
+            withAnimation(.easeInOut(duration: 0.16)) { selectedTab = tab }
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 20, weight: sel ? .bold : .regular))
+                    .foregroundStyle(sel ? PXTheme.accent : PXTheme.textSecondary)
+                Text(tab.rawValue)
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(sel ? PXTheme.accent : PXTheme.textSecondary)
+                    .tracking(0.5)
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 12)
+            .background(sel ? PXTheme.accentGlow : Color.clear)
+            .overlay(
+                Rectangle().fill(sel ? PXTheme.accent : Color.clear).frame(width: 3),
+                alignment: .leading)
         }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Content
+
+    private var contentArea: some View {
+        ScrollView {
+            VStack(spacing: 10) {
+                switch selectedTab {
+                case .mira:  MiraPanel(cfg: cfg, onToggle: applyIfInjected)
+                case .esp:   ESPPanel(cfg: cfg, onToggle: applyIfInjected)
+                case .raioX: RaioXPanel(cfg: cfg, onToggle: applyIfInjected)
+                case .geral: GeralPanel(cfg: cfg, onToggle: applyIfInjected)
+                }
+            }
+            .padding(12)
+        }
+        .background(PXTheme.backgroundDeep)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // Apply to FF container setiap kali toggle — HANYA bila dah inject
+    private func applyIfInjected() {
+        guard appState.isInjected else { return }
+        appState.applyConfig(game: selectedGame, cfg: cfg)
+    }
+
+    // MARK: Bottom Bar
+
+    private var bottomBar: some View {
+        HStack(spacing: 10) {
+            // Restore / Clear
+            Button {
+                if appState.isInjected { showRestoreAlert = true }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "trash").font(.system(size: 13, weight: .semibold))
+                    Text("LIMPAR").font(.system(size: 13, weight: .bold, design: .rounded))
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 15)
+                .foregroundStyle(PXTheme.text)
+                .background(PXTheme.card)
+                .clipShape(RoundedRectangle(cornerRadius: PXTheme.cornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: PXTheme.cornerRadius, style: .continuous)
+                        .strokeBorder(PXTheme.glassBorder, lineWidth: 0.8))
+                .opacity(appState.isInjected ? 1 : 0.4)
+            }
+            .buttonStyle(.plain)
+
+            // Inject / Injected
+            Button {
+                if !appState.isInjected {
+                    appState.doInject(game: selectedGame, cfg: cfg)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if appState.isInjecting {
+                        ProgressView().tint(.white).scaleEffect(0.8)
+                    } else {
+                        Image(systemName: appState.isInjected ? "checkmark.seal.fill" : "play.fill")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    Text(appState.isInjecting ? "INJETANDO..." :
+                         appState.isInjected  ? "INJETADO ✓"  : "INICIAR")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 15)
+                .foregroundStyle(.white)
+                .background(
+                    appState.isInjected
+                        ? PXTheme.accentDark
+                        : (appState.exploitReady ? PXTheme.accent : PXTheme.textDim))
+                .clipShape(RoundedRectangle(cornerRadius: PXTheme.cornerRadius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(!appState.exploitReady || appState.isInjecting || appState.isInjected)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(PXTheme.background)
     }
 
     private func refreshCountdown() {
@@ -163,716 +352,248 @@ struct MainMenuView: View {
             countdown = LicenseService.countdownString(from: exp)
         }
     }
+}
 
-    // MARK: - Deep Clean
+// MARK: - Toggle Row
 
-    private func doDeepClean() {
-        let fm = FileManager.default
-        let bundleFF    = FFGame.freeFire.bundleID    // "com.dts.freefireth"
-        let bundleFFMax = FFGame.freefireMax.bundleID // "com.dts.freefiremax"
+private struct TRow: View {
+    let icon:  String
+    let title: String
+    @Binding var isOn: Bool
+    var subtitle: String? = nil
+    var onChange: (() -> Void)? = nil
 
-        var deleted: [String] = []
-        var failed:  [String] = []
-
-        for bundleID in [bundleFF, bundleFFMax] {
-            guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
-                failed.append(bundleID)
-                continue
-            }
-            let containerURL = URL(fileURLWithPath: containerPath, isDirectory: true)
-            do {
-                // Delete contents of the container folder (not the UUID folder itself)
-                let contents = try fm.contentsOfDirectory(
-                    at: containerURL,
-                    includingPropertiesForKeys: nil,
-                    options: []
-                )
-                for item in contents {
-                    try? fm.removeItem(at: item)
-                }
-                deleted.append(bundleID)
-                log("deep clean OK: \(bundleID)")
-            } catch {
-                failed.append(bundleID)
-                log("deep clean FAIL: \(bundleID) — \(error.localizedDescription)")
-            }
-        }
-
-        // Reset injected state
-        state.ffInjected    = false
-        state.ffMaxInjected = false
-
-        if failed.isEmpty {
-            deepCleanResult = "Cleaned successfully."
-        } else {
-            deepCleanResult = "Done. Failed: \(failed.joined(separator: ", "))"
-        }
-    }
-
-    // MARK: ── Top Bar ──
-
-    private var topBar: some View {
+    var body: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("FF External")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(FFTheme.text)
-                Text(lang.t("login_subtitle"))
-                    .font(.system(size: 11, weight: .regular, design: .rounded))
-                    .foregroundStyle(FFTheme.textSecondary)
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isOn ? PXTheme.accentDark : PXTheme.cardElevated)
+                    .frame(width: 34, height: 34)
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isOn ? .white : PXTheme.textSecondary)
             }
-
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PXTheme.text)
+                if let sub = subtitle {
+                    Text(sub).font(.system(size: 10, weight: .regular, design: .rounded))
+                        .foregroundStyle(PXTheme.textSecondary)
+                }
+            }
             Spacer()
-
-            // Language button
-            Button {
-                showLanguagePicker = true
-            } label: {
-                Image(systemName: "globe")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(FFTheme.text)
-                    .frame(width: 36, height: 36)
-                    .background(FFTheme.card)
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(FFTheme.glassBorder, lineWidth: 0.8))
-            }
-            .buttonStyle(.plain)
-
-            // Logout button
-            Button {
-                showLogoutConfirm = true
-            } label: {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(FFTheme.danger)
-                    .frame(width: 36, height: 36)
-                    .background(FFTheme.danger.opacity(0.12))
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(FFTheme.danger.opacity(0.25), lineWidth: 0.8))
-            }
-            .buttonStyle(.plain)
+            Toggle("", isOn: $isOn).labelsHidden().tint(PXTheme.accent)
+                .onChange(of: isOn) { _ in onChange?() }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 12)
-    }
-
-    // MARK: ── Info Card ──
-
-    private var infoCard: some View {
-        VStack(spacing: 0) {
-
-            // ── KEY row ──
-            HStack(spacing: 8) {
-                Image(systemName: "key.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(FFTheme.textSecondary)
-                    .frame(width: 18)
-
-                Text("KEY")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(FFTheme.textSecondary)
-                    .tracking(0.8)
-
-                Spacer()
-
-                Text(keyVisible
-                     ? licenseInfo.key
-                     : LicenseService.maskedKey(licenseInfo.key))
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(FFTheme.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .truncationMode(.middle)
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) { keyVisible.toggle() }
-                } label: {
-                    Image(systemName: keyVisible ? "eye.slash.fill" : "eye.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(FFTheme.textSecondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-
-            rowDivider
-
-            // ── IOS VERSION row ──
-            HStack(spacing: 8) {
-                Image(systemName: "apple.logo")
-                    .font(.system(size: 11))
-                    .foregroundStyle(FFTheme.textSecondary)
-                    .frame(width: 18)
-
-                Text("IOS VERSION")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(FFTheme.textSecondary)
-                    .tracking(0.8)
-
-                Spacer()
-
-                Text("iOS \(licenseInfo.iOSVersion)")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(FFTheme.text)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-
-            rowDivider
-
-            // ── DEVICE row ──
-            HStack(spacing: 8) {
-                Image(systemName: "iphone")
-                    .font(.system(size: 11))
-                    .foregroundStyle(FFTheme.textSecondary)
-                    .frame(width: 18)
-
-                Text("DEVICE")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(FFTheme.textSecondary)
-                    .tracking(0.8)
-
-                Spacer()
-
-                Text(licenseInfo.iPhoneModel)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(FFTheme.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-
-            rowDivider
-
-            // ── STATUS row ──
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(FFTheme.success)
-                    .frame(width: 18)
-
-                Text("STATUS")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(FFTheme.textSecondary)
-                    .tracking(0.8)
-
-                Spacer()
-
-                HStack(spacing: 5) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(FFTheme.success)
-                    Text("VERIFIED")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(FFTheme.success)
-                        .tracking(0.5)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(FFTheme.success.opacity(0.12))
-                .clipShape(Capsule())
-                .overlay(Capsule().strokeBorder(FFTheme.success.opacity(0.30), lineWidth: 0.8))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-
-            rowDivider
-
-            // ── EXPIRY row ──
-            HStack(spacing: 8) {
-                Image(systemName: "clock.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(expiryColor)
-                    .frame(width: 18)
-
-                Text("EXPIRES IN")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(FFTheme.textSecondary)
-                    .tracking(0.8)
-
-                Spacer()
-
-                Text(countdown.isEmpty ? licenseInfo.expiresAt : countdown)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundStyle(expiryColor)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-        }
-        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 12).padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: FFTheme.cornerRadius, style: .continuous)
-                .fill(FFTheme.card)
+            RoundedRectangle(cornerRadius: PXTheme.cornerRadius, style: .continuous)
+                .fill(PXTheme.card)
                 .overlay(
-                    RoundedRectangle(cornerRadius: FFTheme.cornerRadius, style: .continuous)
-                        .strokeBorder(FFTheme.glassBorder, lineWidth: 0.8)
-                )
-        )
-    }
-
-    private var rowDivider: some View {
-        Rectangle().fill(FFTheme.separator).frame(height: 0.6)
-    }
-
-    private var expiryColor: Color {
-        guard let exp = licenseInfo.expiryDate else { return FFTheme.textSecondary }
-        let r = exp.timeIntervalSince(Date())
-        if r < 0       { return FFTheme.danger }
-        if r < 86400   { return FFTheme.danger }
-        if r < 259200  { return FFTheme.warn }
-        return FFTheme.success
-    }
-
-    // MARK: ── Game Tab Bar ──
-
-    private var gameTabBar: some View {
-        HStack(spacing: 0) {
-            ForEach([FFGame.freeFire, FFGame.freefireMax].indices, id: \.self) { i in
-                let game: FFGame = i == 0 ? .freeFire : .freefireMax
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) {
-                        selectedTab = i
-                    }
-                } label: {
-                    VStack(spacing: 4) {
-                        Text(game.displayName)
-                            .font(.system(size: 14, weight: selectedTab == i ? .bold : .regular, design: .rounded))
-                            .foregroundStyle(selectedTab == i ? FFTheme.text : FFTheme.textSecondary)
-                        Capsule()
-                            .fill(selectedTab == i ? FFTheme.text : Color.clear)
-                            .frame(height: 2)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .background(FFTheme.card)
-        .overlay(
-            Rectangle().fill(FFTheme.separator).frame(height: 0.6),
-            alignment: .bottom
-        )
-    }
-
-    // MARK: ── Deep Clean Button ──
-
-    private var deepCleanButton: some View {
-        Button {
-            showDeepCleanConfirm = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "trash.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("DEEP CLEAN")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .tracking(0.5)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 13)
-            .background(FFTheme.danger)
-            .overlay(
-                Rectangle().fill(FFTheme.separator).frame(height: 0.6),
-                alignment: .top
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: ── Telegram Banner ──
-
-    private var telegramBanner: some View {
-        Button {
-            if let url = URL(string: "https://t.me/ffexternal") {
-                UIApplication.shared.open(url)
-            }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(FFTheme.textSecondary)
-                Text(lang.t("telegram"))
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
-                    .foregroundStyle(FFTheme.textSecondary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(FFTheme.textTertiary)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 13)
-            .background(FFTheme.card)
-            .overlay(
-                Rectangle().fill(FFTheme.separator).frame(height: 0.6),
-                alignment: .top
-            )
-        }
-        .buttonStyle(.plain)
+                    RoundedRectangle(cornerRadius: PXTheme.cornerRadius, style: .continuous)
+                        .strokeBorder(isOn ? PXTheme.redBorder : PXTheme.glassBorder,
+                                      lineWidth: isOn ? 1.0 : 0.7)))
+        .animation(.easeInOut(duration: 0.15), value: isOn)
     }
 }
 
-// MARK: - Game Menu View
-
-struct GameMenuView: View {
-    @Environment(\.ffLanguage) private var lang
-    let game: FFGame
-    @Binding var injected: Bool
-    let exploitReady: Bool
-
-    @State private var selectedFeature: FFFeature = .aimBody
-    @State private var injecting            = false
-    @State private var showTerminal         = false
-    @State private var terminalLines:  [String] = []
-    @State private var showSuccess          = false
-    @State private var showRestoreSuccess   = false
-    @State private var errorMessage: String? = nil
-    @State private var availability: [FFFeature: Bool] = [:]
-    @State private var checkingAvailability = true
+private struct SRow: View {
+    let icon:  String; let title: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var step:  Double = 1; var unit: String = ""
+    var onChange: (() -> Void)? = nil
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 14) {
-                featureGrid
-                    .padding(.horizontal, 16)
-                hintCard
-                    .padding(.horizontal, 16)
-                actionButtons
-                    .padding(.horizontal, 16)
-
-                if let err = errorMessage {
-                    Text(err)
-                        .font(FFTheme.captionFont)
-                        .foregroundStyle(FFTheme.danger)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
-                        .transition(.opacity)
-                }
-
-                Spacer(minLength: 24)
-            }
-            .padding(.top, 16)
-        }
-        .overlay(
-            Group {
-                if showTerminal       { terminalOverlay }
-                if showSuccess        { successOverlay(text: lang.t("inject_success"),  icon: "checkmark.seal.fill",              color: FFTheme.success) }
-                if showRestoreSuccess { successOverlay(text: lang.t("restore_success"), icon: "arrow.uturn.backward.circle.fill", color: FFTheme.warn) }
-            }
-        )
-        .animation(.easeInOut(duration: 0.22), value: errorMessage)
-        .task { await checkAvailability() }
-    }
-
-    // MARK: ── Feature Grid ──
-
-    private var featureGrid: some View {
-        LazyVGrid(
-            columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
-            spacing: 10
-        ) {
-            ForEach(FFFeature.allCases, id: \.self) { feature in
-                FeatureCard(
-                    feature: feature,
-                    isSelected: selectedFeature == feature,
-                    available: availability[feature] ?? true,
-                    loading: checkingAvailability
-                ) {
-                    if availability[feature] ?? true {
-                        withAnimation(.spring(response: 0.22, dampingFraction: 0.7)) {
-                            selectedFeature = feature
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: ── Hint Card ──
-
-    private var hintCard: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "info.circle.fill")
-                .foregroundStyle(FFTheme.textSecondary)
-                .font(.system(size: 13))
-                .padding(.top, 1)
-            Text(lang.t("inject_hint"))
-                .font(FFTheme.captionFont)
-                .foregroundStyle(FFTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(FFTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: FFTheme.cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: FFTheme.cornerRadius, style: .continuous)
-                .strokeBorder(FFTheme.glassBorder, lineWidth: 0.8)
-        )
-    }
-
-    // MARK: ── Action Buttons ──
-
-    private var actionButtons: some View {
-        VStack(spacing: 10) {
-            if !injected {
-                FFButton(
-                    title: lang.t("inject"),
-                    icon: "bolt.fill",
-                    action: doInject,
-                    isLoading: injecting,
-                    isDisabled: injecting || !(availability[selectedFeature] ?? true)
-                )
-            } else {
-                FFButton(
-                    title: lang.t("restore"),
-                    icon: "arrow.uturn.backward.circle.fill",
-                    action: doRestore,
-                    isDisabled: injecting,
-                    style: .secondary
-                )
-            }
-        }
-    }
-
-    // MARK: ── Terminal Overlay ──
-
-    private var terminalOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.82).ignoresSafeArea()
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 6) {
-                    Circle().fill(Color(red: 1, green: 0.37, blue: 0.33)).frame(width: 10, height: 10)
-                    Circle().fill(Color(red: 1, green: 0.73, blue: 0.18)).frame(width: 10, height: 10)
-                    Circle().fill(Color(red: 0.15, green: 0.78, blue: 0.40)).frame(width: 10, height: 10)
-                    Spacer()
-                    Text("FF External — Inject")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.05))
-
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        ForEach(terminalLines.indices, id: \.self) { i in
-                            Text(terminalLines[i])
-                                .font(.system(size: 12, weight: .regular, design: .monospaced))
-                                .foregroundStyle(lineColor(terminalLines[i]))
-                        }
-                        Text("█")
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(height: 180)
-                .background(Color.black.opacity(0.9))
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(FFTheme.glassBorder, lineWidth: 0.8)
-            )
-            .padding(.horizontal, 28)
-        }
-        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-    }
-
-    private func lineColor(_ line: String) -> Color {
-        if line.contains("Success") || line.contains("✓") || line.contains("OK") { return FFTheme.success }
-        if line.contains("✗") || line.contains("error") || line.contains("FAIL") { return FFTheme.danger }
-        if line.contains("Injecting") || line.contains("Exploiting")             { return FFTheme.accentAlt }
-        return .white.opacity(0.70)
-    }
-
-    private func successOverlay(text: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 44))
-                .foregroundStyle(color)
-            Text(text)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .foregroundStyle(FFTheme.text)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(FFTheme.background.opacity(0.90).ignoresSafeArea())
-        .transition(.opacity)
-    }
-
-    // MARK: ── Actions ──
-
-    private func doInject() {
-        let feature = selectedFeature
-        terminalLines = []
-        errorMessage  = nil
-        withAnimation { showTerminal = true }
-
-        func line(_ s: String) {
-            DispatchQueue.main.async { terminalLines.append(s) }
-        }
-
-        Task {
-            let gameName = game.displayName
-            line("Exploiting \(gameName)")
-            try? await Task.sleep(for: .milliseconds(400))
-            line("Injecting \(feature.displayName)")
-            try? await Task.sleep(for: .milliseconds(500))
-
-            do {
-                try await FFCheatService.inject(game: game, feature: feature)
-                line("Success inject \(feature.displayName)")
-                try? await Task.sleep(for: .milliseconds(600))
-                await MainActor.run {
-                    withAnimation { showTerminal = false }
-                    injected = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        withAnimation { showSuccess = true }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                            withAnimation { showSuccess = false }
-                        }
-                    }
-                }
-            } catch {
-                line("✗ Error: \(error.localizedDescription)")
-                try? await Task.sleep(for: .milliseconds(1500))
-                await MainActor.run {
-                    withAnimation { showTerminal = false }
-                    errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func doRestore() {
-        errorMessage = nil
-        injecting    = true
-        Task {
-            do {
-                try FFCheatService.restore(game: game)
-                await MainActor.run {
-                    injecting = false
-                    injected  = false
-                    withAnimation { showRestoreSuccess = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-                        withAnimation { showRestoreSuccess = false }
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    injecting    = false
-                    errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func checkAvailability() async {
-        checkingAvailability = true
-        var result: [FFFeature: Bool] = [:]
-        await withTaskGroup(of: (FFFeature, Bool).self) { group in
-            for feature in FFFeature.allCases {
-                group.addTask {
-                    let ok = await FFCheatManifest.checkAvailability(game: self.game, feature: feature)
-                    return (feature, ok)
-                }
-            }
-            for await (f, ok) in group { result[f] = ok }
-        }
-        await MainActor.run {
-            availability         = result
-            checkingAvailability = false
-        }
-    }
-}
-
-// MARK: - Feature Card
-
-private struct FeatureCard: View {
-    let feature:    FFFeature
-    let isSelected: Bool
-    let available:  Bool
-    let loading:    Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
                 ZStack {
-                    Circle()
-                        .fill(isSelected ? Color.white.opacity(0.15) : FFTheme.cardElevated)
-                        .frame(width: 44, height: 44)
-
-                    if loading {
-                        ProgressView().controlSize(.mini).tint(FFTheme.textSecondary)
-                    } else {
-                        Image(systemName: featureIcon)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(
-                                !available  ? FFTheme.textTertiary :
-                                isSelected  ? FFTheme.text         : FFTheme.textSecondary
-                            )
-                    }
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(PXTheme.accentDark).frame(width: 34, height: 34)
+                    Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
                 }
-
-                Text(feature.displayName)
-                    .font(.system(size: 11, weight: isSelected ? .bold : .regular, design: .rounded))
-                    .foregroundStyle(
-                        !available  ? FFTheme.textTertiary :
-                        isSelected  ? FFTheme.text         : FFTheme.textSecondary
-                    )
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                if !available && !loading {
-                    Text("N/A")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(FFTheme.danger)
-                }
+                Text(title).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(PXTheme.text)
+                Spacer()
+                Text("\(Int(value))\(unit)").font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(PXTheme.accent)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.10) : FFTheme.card)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(
-                                isSelected
-                                    ? Color.white.opacity(0.35)
-                                    : FFTheme.glassBorder,
-                                lineWidth: isSelected ? 1.2 : 0.8
-                            )
-                    )
-            )
-            .scaleEffect(isSelected ? 1.04 : 1.0)
-            .opacity((!available && !loading) ? 0.45 : 1.0)
+            Slider(value: $value, in: range, step: step).tint(PXTheme.accent)
+                .onChange(of: value) { _ in onChange?() }
         }
-        .buttonStyle(.plain)
-        .animation(.spring(response: 0.22, dampingFraction: 0.7), value: isSelected)
+        .padding(.horizontal, 12).padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: PXTheme.cornerRadius, style: .continuous).fill(PXTheme.card)
+            .overlay(RoundedRectangle(cornerRadius: PXTheme.cornerRadius, style: .continuous)
+                .strokeBorder(PXTheme.glassBorder, lineWidth: 0.7)))
     }
+}
 
-    private var featureIcon: String {
-        switch feature {
-        case .aimBody:     return "figure.stand"
-        case .aimNeck:     return "scope"
-        case .aimDrag:     return "cursorarrow.motionlines"
-        case .magicBullet: return "burst.fill"
-        case .aimChest:    return "target"
-        case .esp:         return "eye.fill"
+private struct StepRow: View {
+    let icon: String; let title: String
+    @Binding var value: Int; let range: ClosedRange<Int>
+    var onChange: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(PXTheme.accentDark).frame(width: 34, height: 34)
+                Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+            }
+            Text(title).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(PXTheme.text)
+            Spacer()
+            HStack(spacing: 0) {
+                Button { if value > range.lowerBound { value -= 1; onChange?() } } label: {
+                    Image(systemName: "minus").frame(width: 34, height: 32)
+                        .foregroundStyle(PXTheme.text).background(PXTheme.cardElevated)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }.buttonStyle(.plain)
+                Button { if value < range.upperBound { value += 1; onChange?() } } label: {
+                    Image(systemName: "plus").frame(width: 34, height: 32)
+                        .foregroundStyle(PXTheme.text).background(PXTheme.cardElevated)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }.buttonStyle(.plain)
+                Text("\(value)").font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(PXTheme.accent).frame(minWidth: 28).padding(.leading, 6)
+            }
         }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: PXTheme.cornerRadius, style: .continuous).fill(PXTheme.card)
+            .overlay(RoundedRectangle(cornerRadius: PXTheme.cornerRadius, style: .continuous)
+                .strokeBorder(PXTheme.glassBorder, lineWidth: 0.7)))
+    }
+}
+
+private struct SecHeader: View {
+    let title: String
+    var body: some View {
+        Text(title).font(.system(size: 12, weight: .bold, design: .rounded))
+            .foregroundStyle(PXTheme.accent).tracking(1)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4).padding(.top, 6)
+    }
+}
+
+// MARK: - Feature Panels
+
+private struct MiraPanel: View {
+    @ObservedObject var cfg: CheatConfig
+    var onToggle: () -> Void
+
+    var body: some View {
+        SecHeader(title: "AIMBOT")
+        TRow(icon: "scope",              title: "Aimbot",              isOn: $cfg.aimOn,      onChange: onToggle)
+        TRow(icon: "person.crop.circle", title: "Head",                isOn: $cfg.aimHead,    onChange: onToggle)
+        TRow(icon: "circle.dashed",      title: "Neck",                isOn: $cfg.aimNeck,    onChange: onToggle)
+        TRow(icon: "figure.stand",       title: "Body",                isOn: $cfg.aimBody,    onChange: onToggle)
+
+        SecHeader(title: "SILENT AIM")
+        TRow(icon: "dot.circle",         title: "Silent Aim",
+             subtitle: "Peluru bengkok ke target dalam FOV",            isOn: $cfg.silentAim,  onChange: onToggle)
+
+        SecHeader(title: "AIM FOV")
+        TRow(icon: "viewfinder.circle",  title: "Tunjuk Bulatan FOV",  isOn: $cfg.aimFovVisible, onChange: onToggle)
+        SRow(icon: "arrow.up.and.down.and.arrow.left.and.right",
+             title: "Radius FOV", value: $cfg.aimFovRadius,
+             range: 10...360, step: 5, unit: "°",                      onChange: onToggle)
+    }
+}
+
+private struct ESPPanel: View {
+    @ObservedObject var cfg: CheatConfig
+    var onToggle: () -> Void
+
+    var body: some View {
+        SecHeader(title: "ESP")
+        TRow(icon: "eye",                        title: "ESP On/Off",          isOn: $cfg.espOn,        onChange: onToggle)
+        TRow(icon: "square.dashed",              title: "Box ESP",             isOn: $cfg.espBox,       onChange: onToggle)
+        TRow(icon: "heart.fill",                 title: "HP Bar",              isOn: $cfg.espHP,        onChange: onToggle)
+        TRow(icon: "person.text.rectangle",      title: "Nama",                isOn: $cfg.espName,      onChange: onToggle)
+        TRow(icon: "ruler",                      title: "Jarak",               isOn: $cfg.espDistance,  onChange: onToggle)
+        TRow(icon: "arrow.up.circle",            title: "Arah",                isOn: $cfg.espDirection, onChange: onToggle)
+        TRow(icon: "mappin.circle",              title: "Mark Musuh",          isOn: $cfg.espMarkEnemy, onChange: onToggle)
+        SRow(icon: "scope", title: "Jarak Max", value: $cfg.espMaxDist,
+             range: 20...200, step: 5, unit: "m",                               onChange: onToggle)
+    }
+}
+
+private struct RaioXPanel: View {
+    @ObservedObject var cfg: CheatConfig
+    var onToggle: () -> Void
+
+    var body: some View {
+        SecHeader(title: "RAIO-X")
+        TRow(icon: "eye.fill",              title: "Xray Watak",          isOn: $cfg.xrayChar,     onChange: onToggle)
+        TRow(icon: "square.stack.3d.up",    title: "Xray Dinding",        isOn: $cfg.xrayWall,     onChange: onToggle)
+        TRow(icon: "rectangle.on.rectangle",title: "Tembus Dinding",      isOn: $cfg.xrayThruWall, onChange: onToggle)
+        StepRow(icon: "timer",       title: "Masa Hidup",  value: $cfg.xrayOnTime,  range: 1...30, onChange: onToggle)
+        StepRow(icon: "timer.circle",title: "Masa Mati",   value: $cfg.xrayOffTime, range: 1...30, onChange: onToggle)
+
+        SecHeader(title: "OUTLINE / CONTOUR")
+        TRow(icon: "cube.transparent",      title: "3D Outline",          isOn: $cfg.outline3D,    onChange: onToggle)
+        TRow(icon: "heart.text.square",     title: "Warna Ikut HP",       isOn: $cfg.outlineByHP,  onChange: onToggle)
+        StepRow(icon: "line.3.horizontal",  title: "Lebar Outline", value: $cfg.outlineWidth, range: 1...30, onChange: onToggle)
+
+        SecHeader(title: "WARNA OUTLINE")
+        HStack(spacing: 6) {
+            ForEach(OutlineColor.allCases, id: \.self) { c in
+                Button {
+                    cfg.outlineColor = c
+                    onToggle()
+                } label: {
+                    Text(c.label)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                        .foregroundStyle(cfg.outlineColor == c ? .white : PXTheme.textSecondary)
+                        .background(cfg.outlineColor == c ? PXTheme.accent : PXTheme.cardElevated)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+private struct GeralPanel: View {
+    @ObservedObject var cfg: CheatConfig
+    var onToggle: () -> Void
+
+    var body: some View {
+        SecHeader(title: "WEAPON")
+        TRow(icon: "bolt.fill",       title: "No Recoil",
+             subtitle: "__mrf=0 / __xrf=0",                              isOn: $cfg.noRecoil,   onChange: onToggle)
+        TRow(icon: "burst.fill",      title: "Fast Fire Rate",
+             subtitle: "__spf=150",                                       isOn: $cfg.fastFire,   onChange: onToggle)
+        TRow(icon: "aqi.low",         title: "No Spread",
+             subtitle: "__swpf=100",                                      isOn: $cfg.noSpread,   onChange: onToggle)
+
+        SecHeader(title: "MOVEMENT")
+        TRow(icon: "figure.run",      title: "Speed Hack",
+             subtitle: "set_EatSpeedScale intercept",                     isOn: $cfg.speedOn,    onChange: onToggle)
+
+        if cfg.speedOn {
+            SecHeader(title: "SPEED LEVEL")
+            HStack(spacing: 6) {
+                ForEach(SpeedLevel.allCases, id: \.self) { lvl in
+                    Button {
+                        cfg.speedLevel = lvl
+                        onToggle()
+                    } label: {
+                        Text(lvl.label).font(.system(size: 11, weight: .bold, design: .rounded))
+                            .frame(maxWidth: .infinity).padding(.vertical, 9)
+                            .foregroundStyle(cfg.speedLevel == lvl ? .white : PXTheme.textSecondary)
+                            .background(cfg.speedLevel == lvl ? PXTheme.accent : PXTheme.cardElevated)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }.buttonStyle(.plain)
+                }
+            }.padding(.horizontal, 4)
+        }
+
+        SecHeader(title: "TEAM")
+        TRow(icon: "cross.case",      title: "Fast Revive",
+             subtitle: "__xrrv=1 (normal=864)",                           isOn: $cfg.fastRevive, onChange: onToggle)
+
+        SecHeader(title: "GENERAL")
+        TRow(icon: "speedometer",     title: "120 FPS",                  isOn: $cfg.fps120,     onChange: onToggle)
+        TRow(icon: "arrow.up.left.and.arrow.down.right",
+                                      title: "Dynamic Scale",            isOn: $cfg.dynamicScale, onChange: onToggle)
     }
 }
